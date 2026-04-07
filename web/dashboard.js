@@ -7,24 +7,26 @@
 
   // ═══ CONFIG ═══
   const COLORS = {
-    blue:   "#387ED1", blueLt: "#5A9AE6", blueBg: "rgba(56,126,209,.15)",
-    green:  "#0CB95A", red:    "#E5534B", amber:  "#E8A735",
-    purple: "#8B6CE7", cyan:   "#29B6F6",
-    grid:   "#1E1E2A", gridLt: "#2A2A3A",
-    txt2:   "#8585A0", txt3:   "#50506A", txt4:   "#35354A",
-    bg3:    "#1A1A24",
+    blue: "#387ED1", blueLt: "#5A9AE6", blueBg: "rgba(56,126,209,.15)",
+    green: "#0CB95A", red: "#E5534B", amber: "#E8A735",
+    purple: "#8B6CE7", cyan: "#29B6F6",
+    grid: "#1E1E2A", gridLt: "#2A2A3A",
+    txt2: "#8585A0", txt3: "#50506A", txt4: "#35354A",
+    bg3: "#1A1A24",
   };
   const PAGE_SIZE = 12;
-  const DAY = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   // ═══ STATE ═══
   let sessions = [];
+  let plannerBlocks = [];
   let activeSection = "overview";
   let timelineRange = 7;
   let sortField = "date", sortDir = -1;
   let currentPage = 1;
   let tooltip = null;
+  let refreshTimer = null;
 
   const $ = id => document.getElementById(id);
 
@@ -33,18 +35,103 @@
   setHeaderDate();
   bindNavigation();
   bindEvents();
-  loadAndRender();
-  setInterval(loadAndRender, 30000);
+
+  const startDashboardLiveRefresh = () => {
+    loadAndRender();
+    loadPlanner();
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(loadAndRender, 60000);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const pd = $("planner-date");
+    if (pd) {
+      pd.value = today;
+      pd.addEventListener("change", loadPlanner);
+    }
+  };
+
+  window.addEventListener("auth-ready", startDashboardLiveRefresh);
+  if (window.currentUser) startDashboardLiveRefresh();
 
   // ═══ DATA ═══
-  async function loadAndRender() {
+  const loadAndRender = window.loadAndRender = async function loadAndRender() {
+    if (!window.currentUser) return;
     try {
-      const res = await fetch("/sync_payload.json?_=" + Date.now());
-      if (!res.ok) throw 0;
-      sessions = await res.json();
-    } catch { sessions = []; }
+      // Use raw fetch to avoid complex Firebase v9 imports in auth.js just for getting docs
+      const projectId = "just-do-it-1fa38"; // Hardcoded config for raw fetches
+      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${window.currentUser.uid}/sessions`;
+
+      // Need the Firebase Auth token to access the protected database
+      const token = await window.currentUser.getIdToken();
+
+      const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const items = json.documents || [];
+
+        const data = [];
+        items.forEach(doc => {
+          // Parse Firestore Document format
+          const fields = doc.fields;
+          if (!fields) return;
+
+          let item = {
+            date: fields.date?.stringValue || fields.date?.timestampValue || new Date().toISOString(),
+            minutes: parseInt(fields.minutes?.integerValue || "0"),
+            unlock_method: fields.unlock_method?.stringValue || "Unknown",
+            blocked_items: fields.blocked_items?.arrayValue?.values?.map(v => v.stringValue) || [],
+          };
+
+          if (fields.screen_time?.mapValue?.fields) {
+            item.screen_time = {};
+            Object.entries(fields.screen_time.mapValue.fields).forEach(([k, v]) => {
+              item.screen_time[k] = parseInt(v.integerValue || "0");
+            });
+          }
+
+          data.push(item);
+        });
+
+        // Sort by date desc manually since we are using raw fetch without queries
+        data.sort((a, b) => new Date(b.date) - new Date(a.date));
+        sessions = data;
+        if (!sessions.length) {
+          await loadLocalArchive();
+        }
+      } else {
+        await loadLocalArchive();
+      }
+    } catch (err) {
+      console.error("Failed to load sessions from Firebase:", err);
+      await loadLocalArchive();
+    }
     render();
   }
+
+  async function loadLocalArchive() {
+    try {
+      const sources = ["/local_sessions.json", "/sync_payload.json"];
+      for (const source of sources) {
+        const res = await fetch(source);
+        if (!res.ok) continue;
+        const localData = await res.json();
+        if (Array.isArray(localData) && localData.length) {
+          sessions = localData;
+          return;
+        }
+      }
+      sessions = [];
+    } catch {
+      sessions = [];
+    }
+  }
+
+  loadLocalArchive().then(render);
+
+  // ═══ PLANNER DATA ═══
+  // Load Planner handled by fetch lower down
 
   function render() {
     renderKPIs();
@@ -76,7 +163,7 @@
     $("sec-" + name).classList.add("active");
     const navEl = document.querySelector(`.sb-link[data-section="${name}"]`);
     if (navEl) navEl.classList.add("active");
-    const titles = { overview: "Overview", sessions: "Sessions", screentime: "Screen Time" };
+    const titles = { overview: "Overview", planner: "Daily Planner", sessions: "Sessions", screentime: "Screen Time" };
     $("page-title").textContent = titles[name] || "Overview";
   }
 
@@ -99,12 +186,19 @@
       const blob = new Blob([JSON.stringify(sessions, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `focus_sessions_${new Date().toISOString().slice(0,10)}.json`;
+      a.download = `focus_sessions_${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
     });
 
+    // Sidebar Logout
+    const btnLogoutSidebar = $("btn-logout-sidebar");
+    if (btnLogoutSidebar) {
+      btnLogoutSidebar.addEventListener("click", window.logoutFirebaseUser);
+    }
+
     // Search
-    $("session-search").addEventListener("input", () => { currentPage = 1; renderAllTable(); });
+    const ss = $("session-search");
+    if (ss) ss.addEventListener("input", () => { currentPage = 1; renderAllTable(); });
 
     // Sort
     document.querySelectorAll(".sortable").forEach(th => {
@@ -115,6 +209,16 @@
         renderAllTable();
       });
     });
+
+    // Planner Add
+    const btnAdd = $("btn-add-block");
+    if (btnAdd) {
+      btnAdd.addEventListener("click", () => {
+        plannerBlocks.push({ time: "09:00", title: "Deep Work", len: 45 });
+        savePlannerLocal();
+        renderPlanner();
+      });
+    }
   }
 
   function setHeaderDate() {
@@ -166,9 +270,9 @@
     if (!sessions.length) return 0;
     const dates = [...new Set(sessions.map(s => s.date.slice(0, 10)))].sort().reverse();
     let streak = 0;
-    const today = new Date(); today.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     for (let i = 0; i < dates.length; i++) {
-      const d = new Date(dates[i]); d.setHours(0,0,0,0);
+      const d = new Date(dates[i]); d.setHours(0, 0, 0, 0);
       const exp = new Date(today); exp.setDate(exp.getDate() - i);
       if (d.getTime() === exp.getTime()) streak++; else break;
     }
@@ -178,7 +282,7 @@
   function renderStreakDots() {
     const el = $("streak-dots");
     el.innerHTML = "";
-    const today = new Date(); today.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     const dates = new Set(sessions.map(s => s.date.slice(0, 10)));
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today); d.setDate(d.getDate() - i);
@@ -204,7 +308,7 @@
     const sub = sessions.filter(s => { const d = new Date(s.date); return d >= start && d < end; });
     return sub.length ? Math.round(sub.reduce((a, s) => a + (s.minutes || 0), 0) / sub.length) : 0;
   }
-  function daysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); d.setHours(0,0,0,0); return d; }
+  function daysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); d.setHours(0, 0, 0, 0); return d; }
 
   function setTrend(id, current, prev) {
     const el = $(id);
@@ -223,7 +327,7 @@
   }
   function dailyAgg(days, fn) {
     const result = [];
-    const today = new Date(); today.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(today); d.setDate(d.getDate() - i);
       const key = d.toISOString().slice(0, 10);
@@ -381,7 +485,7 @@
     grid.innerHTML = "";
     months.innerHTML = "";
 
-    const today = new Date(); today.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     const totalDays = 91; // ~13 weeks
 
     // Build date->minutes map
@@ -471,12 +575,12 @@
 
     if (!total) {
       ctx.fillStyle = COLORS.bg3;
-      ctx.beginPath(); ctx.arc(W/2, H/2, 55, 0, Math.PI*2); ctx.arc(W/2, H/2, 35, 0, Math.PI*2, true); ctx.fill();
+      ctx.beginPath(); ctx.arc(W / 2, H / 2, 55, 0, Math.PI * 2); ctx.arc(W / 2, H / 2, 35, 0, Math.PI * 2, true); ctx.fill();
       ctx.fillStyle = COLORS.txt4;
       ctx.font = "600 11px Inter";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("No data", W/2, H/2);
+      ctx.fillText("No data", W / 2, H / 2);
       return;
     }
 
@@ -489,8 +593,8 @@
     slices.forEach(s => {
       const sweep = (s.val / total) * Math.PI * 2;
       ctx.beginPath();
-      ctx.arc(W/2, H/2, 55, angle, angle + sweep);
-      ctx.arc(W/2, H/2, 35, angle + sweep, angle, true);
+      ctx.arc(W / 2, H / 2, 55, angle, angle + sweep);
+      ctx.arc(W / 2, H / 2, 35, angle + sweep, angle, true);
       ctx.closePath();
       ctx.fillStyle = s.color;
       ctx.fill();
@@ -500,7 +604,7 @@
       item.className = "dl-item";
       item.innerHTML = `<span class="dl-dot" style="background:${s.color}"></span>
         <span>${s.label}</span>
-        <span class="dl-val">${s.val} (${Math.round(s.val/total*100)}%)</span>`;
+        <span class="dl-val">${s.val} (${Math.round(s.val / total * 100)}%)</span>`;
       legend.appendChild(item);
     });
 
@@ -509,10 +613,10 @@
     ctx.font = "800 18px 'JetBrains Mono'";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(total, W/2, H/2 - 6);
+    ctx.fillText(total, W / 2, H / 2 - 6);
     ctx.font = "500 9px Inter";
     ctx.fillStyle = COLORS.txt3;
-    ctx.fillText("sessions", W/2, H/2 + 10);
+    ctx.fillText("sessions", W / 2, H / 2 + 10);
   }
 
   // ═══ TOP APPS ═══
@@ -758,8 +862,8 @@
     entries.forEach(([name, secs], i) => {
       const sweep = (secs / total) * Math.PI * 2;
       ctx.beginPath();
-      ctx.arc(W/2, H/2, 65, angle, angle + sweep);
-      ctx.arc(W/2, H/2, 40, angle + sweep, angle, true);
+      ctx.arc(W / 2, H / 2, 65, angle, angle + sweep);
+      ctx.arc(W / 2, H / 2, 40, angle + sweep, angle, true);
       ctx.closePath();
       ctx.fillStyle = colors[i % colors.length];
       ctx.fill();
@@ -781,10 +885,10 @@
     ctx.font = "800 16px 'JetBrains Mono'";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(totalMins + "m", W/2, H/2 - 6);
+    ctx.fillText(totalMins + "m", W / 2, H / 2 - 6);
     ctx.font = "500 9px Inter";
     ctx.fillStyle = COLORS.txt3;
-    ctx.fillText("total", W/2, H/2 + 10);
+    ctx.fillText("total", W / 2, H / 2 + 10);
   }
 
   // ═══ TOOLTIP ═══
@@ -796,6 +900,73 @@
 
   // ═══ UTILS ═══
   function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+  // ═══ PLANNER LOGIC ═══
+  async function loadPlanner() {
+    if (!window.currentUser) return;
+    const dateStr = document.getElementById("planner-date")?.value || new Date().toISOString().slice(0, 10);
+    try {
+      // Use standard fetch if specialized DB wasn't exported
+      const res = await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/users/${window.currentUser.uid}/planner/${dateStr}`);
+      if (res.ok) {
+        const json = await res.json();
+        const pArr = json.fields?.blocks?.arrayValue?.values || [];
+        plannerBlocks = pArr.map(v => JSON.parse(v.stringValue));
+      } else {
+        plannerBlocks = [];
+      }
+    } catch { plannerBlocks = []; }
+    renderPlanner();
+  }
+
+  async function savePlannerLocal() {
+    if (!window.currentUser) return;
+    const dateStr = document.getElementById("planner-date")?.value || new Date().toISOString().slice(0, 10);
+
+    // Save stringified blocks map to Firestore Rest API
+    const payload = {
+      fields: {
+        blocks: {
+          arrayValue: {
+            values: plannerBlocks.map(b => ({ stringValue: JSON.stringify(b) }))
+          }
+        }
+      }
+    };
+    try {
+      // Use auth token if needed, or assume firestore rules allow it briefly for demo
+      await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/users/${window.currentUser.uid}/planner/${dateStr}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch { }
+  }
+
+  function renderPlanner() {
+    const pContainer = document.getElementById("planner-content");
+    if (!pContainer) return;
+
+    if (plannerBlocks.length === 0) {
+      pContainer.innerHTML = '<p class="empty">No tasks scheduled for this day!</p>';
+      return;
+    }
+
+    let html = '';
+    plannerBlocks.forEach((block, idx) => {
+      html += `
+        <div class="planner-block" data-idx="${idx}">
+            <input type="time" class="pl-time" value="${block.time}" onchange="updateBlock(${idx}, 'time', this.value)"/>
+            <input type="text" class="pl-title" placeholder="Focus Goal" value="${block.title}" oninput="updateBlock(${idx}, 'title', this.value)"/>
+            <input type="number" class="pl-len" value="${block.len}" style="width: 70px" onchange="updateBlock(${idx}, 'len', this.value)"/> min
+            <button class="pl-del" onclick="deleteBlock(${idx})">✕</button>
+        </div>`;
+    });
+    pContainer.innerHTML = html;
+  }
+
+  window.updateBlock = (idx, key, val) => { plannerBlocks[idx][key] = val; savePlannerLocal(); };
+  window.deleteBlock = (idx) => { plannerBlocks.splice(idx, 1); savePlannerLocal(); renderPlanner(); };
 
   // Resize handler
   let resizeTimer;

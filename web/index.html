@@ -1,274 +1,383 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Just Do It — Focus Analytics</title>
-  <meta name="description" content="Industry-grade focus analytics dashboard. Track sessions, streaks, productivity and screen time." />
+  <meta name="description"
+    content="Industry-grade focus analytics dashboard. Track sessions, streaks, productivity and screen time." />
   <meta name="theme-color" content="#0B0B0F" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <script type="module" src="firebase-config.js?v=2"></script>
+  <script type="module" src="auth.js?v=2"></script>
 </head>
+
 <body>
 
-  <!-- ═══ SIDEBAR ═══ -->
-  <nav id="sidebar">
-    <div class="sb-logo">
-      <span class="sb-diamond">◆</span>
-      <span class="sb-brand">JDI</span>
-    </div>
-    <div class="sb-nav">
-      <a class="sb-link active" data-section="overview" href="#" id="nav-overview">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        <span>Overview</span>
-      </a>
-      <a class="sb-link" data-section="sessions" href="#" id="nav-sessions">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span>Sessions</span>
-      </a>
-      <a class="sb-link" data-section="screentime" href="#" id="nav-screentime">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        <span>Screen Time</span>
-      </a>
-    </div>
-    <div class="sb-footer">
-      <button id="btn-export" class="sb-link" title="Export JSON">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span>Export</span>
-      </button>
-    </div>
-  </nav>
-
-  <!-- ═══ MAIN ═══ -->
-  <div id="app">
-
-    <!-- Header -->
-    <header id="header">
-      <div class="hdr-left">
-        <h1 id="page-title">Overview</h1>
-        <span class="hdr-date" id="hdr-date"></span>
-      </div>
-      <div class="hdr-right">
-        <span class="hdr-live" id="hdr-live">
-          <span class="live-dot"></span> Live
-        </span>
-        <button id="btn-refresh" class="hdr-btn" title="Refresh data">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-        </button>
-      </div>
-    </header>
-
-    <!-- ═══ OVERVIEW SECTION ═══ -->
-    <section id="sec-overview" class="section active">
-
-      <!-- KPI Row -->
-      <div id="kpi-row">
-        <div class="kpi" id="kpi-total">
-          <div class="kpi-top">
-            <span class="kpi-label">Total Focus</span>
-            <span class="kpi-trend" id="trend-total"></span>
-          </div>
-          <div class="kpi-val-row">
-            <span class="kpi-val" id="val-total">0<small>min</small></span>
-          </div>
-          <canvas class="kpi-spark" id="spark-total" width="120" height="32"></canvas>
-        </div>
-        <div class="kpi" id="kpi-sessions">
-          <div class="kpi-top">
-            <span class="kpi-label">Sessions</span>
-            <span class="kpi-trend" id="trend-sessions"></span>
-          </div>
-          <div class="kpi-val-row">
-            <span class="kpi-val" id="val-sessions">0</span>
-          </div>
-          <canvas class="kpi-spark" id="spark-sessions" width="120" height="32"></canvas>
-        </div>
-        <div class="kpi" id="kpi-streak">
-          <div class="kpi-top">
-            <span class="kpi-label">Day Streak</span>
-          </div>
-          <div class="kpi-val-row">
-            <span class="kpi-val" id="val-streak">0<small>days</small></span>
-          </div>
-          <div class="streak-bar" id="streak-dots"></div>
-        </div>
-        <div class="kpi" id="kpi-avg">
-          <div class="kpi-top">
-            <span class="kpi-label">Avg / Session</span>
-            <span class="kpi-trend" id="trend-avg"></span>
-          </div>
-          <div class="kpi-val-row">
-            <span class="kpi-val" id="val-avg">0<small>min</small></span>
-          </div>
-          <canvas class="kpi-spark" id="spark-avg" width="120" height="32"></canvas>
-        </div>
-        <div class="kpi" id="kpi-score">
-          <div class="kpi-top">
-            <span class="kpi-label">Focus Score</span>
-          </div>
-          <div class="kpi-val-row">
-            <span class="kpi-val kpi-score-val" id="val-score">0</span>
-          </div>
-          <div class="score-ring-wrap">
-            <svg viewBox="0 0 48 48" class="score-ring">
-              <circle cx="24" cy="24" r="20" class="sr-bg"/>
-              <circle cx="24" cy="24" r="20" class="sr-fg" id="score-ring-fg"/>
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <!-- Charts Row -->
-      <div class="grid-2">
-        <!-- Focus Timeline -->
-        <div class="panel" id="panel-timeline">
-          <div class="panel-hdr">
-            <h2>Focus Timeline</h2>
-            <div class="range-tabs">
-              <button class="rt active" data-range="7">7D</button>
-              <button class="rt" data-range="14">14D</button>
-              <button class="rt" data-range="30">30D</button>
-            </div>
-          </div>
-          <div class="panel-body">
-            <canvas id="chart-timeline" height="200"></canvas>
-          </div>
-        </div>
-
-        <!-- Heatmap -->
-        <div class="panel" id="panel-heatmap">
-          <div class="panel-hdr">
-            <h2>Contribution Heatmap</h2>
-            <span class="panel-sub" id="heatmap-range"></span>
-          </div>
-          <div class="panel-body">
-            <div id="heatmap-months"></div>
-            <div id="heatmap-grid"></div>
-            <div id="heatmap-legend">
-              <span>Less</span>
-              <span class="hl hl-0"></span>
-              <span class="hl hl-1"></span>
-              <span class="hl hl-2"></span>
-              <span class="hl hl-3"></span>
-              <span class="hl hl-4"></span>
-              <span>More</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Row 3: Breakdown + Top Distraction -->
-      <div class="grid-2">
-        <div class="panel" id="panel-methods">
-          <div class="panel-hdr">
-            <h2>Unlock Methods</h2>
-          </div>
-          <div class="panel-body panel-donut-body">
-            <canvas id="chart-donut" width="160" height="160"></canvas>
-            <div id="donut-legend"></div>
-          </div>
-        </div>
-        <div class="panel" id="panel-topapps">
-          <div class="panel-hdr">
-            <h2>Top Screen Time</h2>
-            <span class="panel-sub">Latest session</span>
-          </div>
-          <div class="panel-body">
-            <div id="topapps-list"></div>
-            <p id="topapps-empty" class="empty hidden">No screen time data</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Recent Sessions (compact) -->
-      <div class="panel" id="panel-recent">
-        <div class="panel-hdr">
-          <h2>Recent Sessions</h2>
-          <a href="#" class="panel-link" id="link-all-sessions">View all →</a>
-        </div>
-        <div class="panel-body no-pad">
-          <table id="recent-table" class="data-table">
-            <thead>
-              <tr><th>Date & Time</th><th>Duration</th><th>Method</th><th>Blocked</th><th>Status</th></tr>
-            </thead>
-            <tbody id="recent-body"></tbody>
-          </table>
-          <p id="recent-empty" class="empty hidden">No sessions yet — start one in the app!</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- ═══ SESSIONS SECTION ═══ -->
-    <section id="sec-sessions" class="section">
-      <div class="panel full">
-        <div class="panel-hdr">
-          <h2>All Sessions</h2>
-          <div class="search-wrap">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="session-search" placeholder="Search by date, method..." />
-          </div>
-        </div>
-        <div class="panel-body no-pad">
-          <table id="all-table" class="data-table">
-            <thead>
-              <tr>
-                <th class="sortable" data-sort="date">Date & Time <span class="sort-ico">↕</span></th>
-                <th class="sortable" data-sort="mins">Duration <span class="sort-ico">↕</span></th>
-                <th>Method</th>
-                <th>Blocked Items</th>
-                <th>Screen Time</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="all-body"></tbody>
-          </table>
-          <p id="all-empty" class="empty hidden">No sessions recorded</p>
-        </div>
-        <div class="panel-footer">
-          <span id="all-count"></span>
-          <div id="pagination"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ═══ SCREEN TIME SECTION ═══ -->
-    <section id="sec-screentime" class="section">
-      <div class="panel full">
-        <div class="panel-hdr">
-          <h2>Screen Time Analysis</h2>
-          <span class="panel-sub">Aggregated across all sessions</span>
-        </div>
-        <div class="panel-body">
-          <div id="st-chart-wrap">
-            <canvas id="chart-screentime" height="300"></canvas>
-          </div>
-          <p id="st-empty" class="empty hidden">No screen time data available</p>
-        </div>
-      </div>
-      <div class="grid-2">
-        <div class="panel">
-          <div class="panel-hdr"><h2>Most Used Apps</h2></div>
-          <div class="panel-body no-pad">
-            <table class="data-table" id="st-table">
-              <thead><tr><th>#</th><th>Application</th><th>Time</th><th>% of Total</th></tr></thead>
-              <tbody id="st-body"></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-hdr"><h2>Usage Distribution</h2></div>
-          <div class="panel-body panel-donut-body">
-            <canvas id="chart-st-donut" width="180" height="180"></canvas>
-            <div id="st-donut-legend"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
+  <!-- ── BOOT LOADER ── -->
+  <div id="boot-loader"
+    style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--bg); z-index: 10000; color: var(--blue); font-weight: 800; letter-spacing: 2px;">
+    ◆ JDI
   </div>
 
-  <script src="dashboard.js"></script>
+  <!-- ── AUTHENTICATION OVERLAY ── -->
+  <div id="auth-overlay" class="auth-overlay" style="display: none;">
+    <div class="auth-card">
+      <h2>◆ JDI</h2>
+      <p>Sign in to Focus Analytics</p>
+      <input type="email" id="auth-email" placeholder="Email Address">
+      <input type="password" id="auth-pass" placeholder="Password">
+      <div class="auth-btns">
+        <button id="btn-login" class="btn-primary">Log In</button>
+        <button id="btn-signup" class="btn-secondary">Sign Up</button>
+      </div>
+      <p id="auth-error" class="auth-error"></p>
+    </div>
+  </div>
+
+  <!-- ── MAIN APP (Hidden until auth) ── -->
+  <div id="app-container" class="dashboard-wrapper" style="display: none;">
+
+    <!-- ═══ SIDEBAR ═══ -->
+    <nav id="sidebar">
+      <div class="sb-logo">
+        <span class="sb-diamond">◆</span>
+        <span class="sb-brand">JDI</span>
+      </div>
+      <div class="sb-nav">
+        <a class="sb-link active" data-section="overview" href="#" id="nav-overview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+          <span>Overview</span>
+        </a>
+        <a class="sb-link" data-section="planner" href="#" id="nav-planner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+          <span>Planner</span>
+        </a>
+        <a class="sb-link" data-section="sessions" href="#" id="nav-sessions">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          <span>Sessions</span>
+        </a>
+        <a class="sb-link" data-section="screentime" href="#" id="nav-screentime">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+          <span>Screen Time</span>
+        </a>
+      </div>
+      <div class="sb-footer">
+        <button id="btn-export" class="sb-link" title="Export JSON">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span>Export</span>
+        </button>
+        <button id="btn-logout-sidebar" class="sb-link" title="Log Out" style="color:var(--red); margin-top:5px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          <span>Log Out</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- ═══ MAIN ═══ -->
+    <div id="app">
+
+      <!-- Header -->
+      <header id="header">
+        <div class="hdr-left">
+          <h1 id="page-title">Overview</h1>
+          <span class="hdr-date" id="hdr-date"></span>
+        </div>
+        <div class="hdr-right">
+          <span class="hdr-live" id="hdr-live">
+            <span class="live-dot"></span> Live
+          </span>
+          <button id="btn-refresh" class="hdr-btn" title="Refresh data">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- ═══ OVERVIEW SECTION ═══ -->
+      <section id="sec-overview" class="section active">
+
+        <!-- KPI Row -->
+        <div id="kpi-row">
+          <div class="kpi" id="kpi-total">
+            <div class="kpi-top">
+              <span class="kpi-label">Total Focus</span>
+              <span class="kpi-trend" id="trend-total"></span>
+            </div>
+            <div class="kpi-val-row">
+              <span class="kpi-val" id="val-total">0<small>min</small></span>
+            </div>
+            <canvas class="kpi-spark" id="spark-total" width="120" height="32"></canvas>
+          </div>
+          <div class="kpi" id="kpi-sessions">
+            <div class="kpi-top">
+              <span class="kpi-label">Sessions</span>
+              <span class="kpi-trend" id="trend-sessions"></span>
+            </div>
+            <div class="kpi-val-row">
+              <span class="kpi-val" id="val-sessions">0</span>
+            </div>
+            <canvas class="kpi-spark" id="spark-sessions" width="120" height="32"></canvas>
+          </div>
+          <div class="kpi" id="kpi-streak">
+            <div class="kpi-top">
+              <span class="kpi-label">Day Streak</span>
+            </div>
+            <div class="kpi-val-row">
+              <span class="kpi-val" id="val-streak">0<small>days</small></span>
+            </div>
+            <div class="streak-bar" id="streak-dots"></div>
+          </div>
+          <div class="kpi" id="kpi-avg">
+            <div class="kpi-top">
+              <span class="kpi-label">Avg / Session</span>
+              <span class="kpi-trend" id="trend-avg"></span>
+            </div>
+            <div class="kpi-val-row">
+              <span class="kpi-val" id="val-avg">0<small>min</small></span>
+            </div>
+            <canvas class="kpi-spark" id="spark-avg" width="120" height="32"></canvas>
+          </div>
+          <div class="kpi" id="kpi-score">
+            <div class="kpi-top">
+              <span class="kpi-label">Focus Score</span>
+            </div>
+            <div class="kpi-val-row">
+              <span class="kpi-val kpi-score-val" id="val-score">0</span>
+            </div>
+            <div class="score-ring-wrap">
+              <svg viewBox="0 0 48 48" class="score-ring">
+                <circle cx="24" cy="24" r="20" class="sr-bg" />
+                <circle cx="24" cy="24" r="20" class="sr-fg" id="score-ring-fg" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid-2">
+          <!-- Focus Timeline -->
+          <div class="panel" id="panel-timeline">
+            <div class="panel-hdr">
+              <h2>Focus Timeline</h2>
+              <div class="range-tabs">
+                <button class="rt active" data-range="7">7D</button>
+                <button class="rt" data-range="14">14D</button>
+                <button class="rt" data-range="30">30D</button>
+              </div>
+            </div>
+            <div class="panel-body">
+              <canvas id="chart-timeline" height="200"></canvas>
+            </div>
+          </div>
+
+          <!-- Heatmap -->
+          <div class="panel" id="panel-heatmap">
+            <div class="panel-hdr">
+              <h2>Contribution Heatmap</h2>
+              <span class="panel-sub" id="heatmap-range"></span>
+            </div>
+            <div class="panel-body">
+              <div id="heatmap-months"></div>
+              <div id="heatmap-grid"></div>
+              <div id="heatmap-legend">
+                <span>Less</span>
+                <span class="hl hl-0"></span>
+                <span class="hl hl-1"></span>
+                <span class="hl hl-2"></span>
+                <span class="hl hl-3"></span>
+                <span class="hl hl-4"></span>
+                <span>More</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3: Breakdown + Top Distraction -->
+        <div class="grid-2">
+          <div class="panel" id="panel-methods">
+            <div class="panel-hdr">
+              <h2>Unlock Methods</h2>
+            </div>
+            <div class="panel-body panel-donut-body">
+              <canvas id="chart-donut" width="160" height="160"></canvas>
+              <div id="donut-legend"></div>
+            </div>
+          </div>
+          <div class="panel" id="panel-topapps">
+            <div class="panel-hdr">
+              <h2>Top Screen Time</h2>
+              <span class="panel-sub">Latest session</span>
+            </div>
+            <div class="panel-body">
+              <div id="topapps-list"></div>
+              <p id="topapps-empty" class="empty hidden">No screen time data</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Sessions (compact) -->
+        <div class="panel" id="panel-recent">
+          <div class="panel-hdr">
+            <h2>Recent Sessions</h2>
+            <a href="#" class="panel-link" id="link-all-sessions">View all →</a>
+          </div>
+          <div class="panel-body no-pad">
+            <table id="recent-table" class="data-table">
+              <thead>
+                <tr>
+                  <th>Date & Time</th>
+                  <th>Duration</th>
+                  <th>Method</th>
+                  <th>Blocked</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="recent-body"></tbody>
+            </table>
+            <p id="recent-empty" class="empty hidden">No sessions yet — start one in the app!</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ PLANNER SECTION ═══ -->
+      <section id="sec-planner" class="section">
+        <div class="panel full">
+          <div class="panel-hdr">
+            <h2>Daily Planner</h2>
+          </div>
+          <div class="panel-body">
+            <div class="planner-controls"
+              style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--grid); padding-bottom:15px; margin-bottom:15px;">
+              <div><input type="date" id="planner-date" /></div>
+              <button id="btn-add-block"
+                style="padding: 8px 15px; background:var(--blue); color:#fff; font-weight:600; cursor:pointer;">+ Add
+                Focus Block</button>
+            </div>
+            <div id="planner-content"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ SESSIONS SECTION ═══ -->
+      <section id="sec-sessions" class="section">
+        <div class="panel full">
+          <div class="panel-hdr">
+            <h2>All Sessions</h2>
+            <div class="search-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input type="text" id="session-search" placeholder="Search by date, method..." />
+            </div>
+          </div>
+          <div class="panel-body no-pad">
+            <table id="all-table" class="data-table">
+              <thead>
+                <tr>
+                  <th class="sortable" data-sort="date">Date & Time <span class="sort-ico">↕</span></th>
+                  <th class="sortable" data-sort="mins">Duration <span class="sort-ico">↕</span></th>
+                  <th>Method</th>
+                  <th>Blocked Items</th>
+                  <th>Screen Time</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="all-body"></tbody>
+            </table>
+            <p id="all-empty" class="empty hidden">No sessions recorded</p>
+          </div>
+          <div class="panel-footer">
+            <span id="all-count"></span>
+            <div id="pagination"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ SCREEN TIME SECTION ═══ -->
+      <section id="sec-screentime" class="section">
+        <div class="panel full">
+          <div class="panel-hdr">
+            <h2>Screen Time Analysis</h2>
+            <span class="panel-sub">Aggregated across all sessions</span>
+          </div>
+          <div class="panel-body">
+            <div id="st-chart-wrap">
+              <canvas id="chart-screentime" height="300"></canvas>
+            </div>
+            <p id="st-empty" class="empty hidden">No screen time data available</p>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-hdr">
+              <h2>Most Used Apps</h2>
+            </div>
+            <div class="panel-body no-pad">
+              <table class="data-table" id="st-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Application</th>
+                    <th>Time</th>
+                    <th>% of Total</th>
+                  </tr>
+                </thead>
+                <tbody id="st-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-hdr">
+              <h2>Usage Distribution</h2>
+            </div>
+            <div class="panel-body panel-donut-body">
+              <canvas id="chart-st-donut" width="180" height="180"></canvas>
+              <div id="st-donut-legend"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="dashboard.js?v=2"></script>
 </body>
+
 </html>
