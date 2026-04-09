@@ -25,6 +25,9 @@ jobs:
       - name: Install PyInstaller
         run: py -m pip install --upgrade pip pyinstaller
 
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
       - name: Build executable
         run: |
           py -m PyInstaller --noconfirm --onefile --windowed --name JustDoIt `
@@ -32,12 +35,12 @@ jobs:
             --add-data "engine.exe;." `
             just_do_it.py
 
-      - name: Zip release asset
+      - name: Build installer
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force release | Out-Null
-          Copy-Item dist\JustDoIt.exe release\JustDoIt.exe
-          Compress-Archive -Path release\* -DestinationPath JustDoIt-${{ github.ref_name }}.zip -Force
+          $iscc = Get-ChildItem "C:\Program Files*" -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $iscc) { throw "Inno Setup compiler not found" }
+          & $iscc "/DMyAppVersion=$env:GITHUB_REF_NAME" "installer\JustDoIt.iss"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -46,9 +49,9 @@ jobs:
           body: |
             ## Download the app
 
-            Primary download: `JustDoIt-v${{ github.ref_name }}.zip`
+            Primary download: `JustDoIt-Setup.exe`
 
             The source code archives are generated automatically by GitHub and are not the app download.
           files: |
-            JustDoIt-${{ github.ref_name }}.zip
+            installer/output/JustDoIt-Setup.exe
           generate_release_notes: true

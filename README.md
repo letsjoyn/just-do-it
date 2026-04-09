@@ -294,11 +294,11 @@ To host the dashboard online:
 
 ### Direct App Download
 
-The fastest way to install the desktop app is the GitHub Release asset:
+The fastest way to install the desktop app is the GitHub Release installer:
 
-- [Download the ZIP package](https://github.com/letsjoyn/just-do-it/releases/latest/download/JustDoIt-v1.0.0.zip)
+- [Download JustDoIt-Setup.exe](https://github.com/letsjoyn/just-do-it/releases/latest/download/JustDoIt-Setup.exe)
 
-Start with the `.zip` if Windows blocks the raw `.exe`.
+Start with the installer if Windows blocks raw app bundles.
 
 ### Windows Smart App Control
 
@@ -306,8 +306,8 @@ Some Windows machines block unsigned EXE files from GitHub.
 
 If that happens:
 
-1. Extract the ZIP.
-2. Try running the app again from the extracted folder.
+1. Try running the installer again from Downloads.
+2. Right-click the installer and choose Properties if Windows shows an unblock option.
 3. If Windows still blocks it, the machine needs a trusted signed build.
 
 The real long-term fix is code signing the executable.
@@ -329,15 +329,15 @@ If you prefer Firebase Hosting, the same `web/` folder also works there.
 The repository now includes a release workflow for versioned downloads.
 
 - Push a tag such as `v1.0.0` to trigger a release build.
-- The workflow packages the desktop app into a ZIP download.
-- That ZIP file is the primary release asset.
+- The workflow packages the desktop app into a Windows installer.
+- That installer file is the primary release asset.
 
 ### What Users Download
 
 Users only need two things:
 
 - the hosted website for the dashboard,
-- the ZIP release asset from GitHub Releases for the desktop app.
+- the installer release asset from GitHub Releases for the desktop app.
 
 That keeps the experience simple: one site, one app download.
 
