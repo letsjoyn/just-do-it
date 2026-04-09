@@ -292,6 +292,15 @@ To host the dashboard online:
 
 ## Hosting and Downloads
 
+### Direct App Download
+
+The fastest way to install the desktop app is the GitHub Release asset:
+
+- [Download JustDoIt.exe](https://github.com/letsjoyn/just-do-it/releases/latest/download/JustDoIt.exe)
+- [Download the ZIP package](https://github.com/letsjoyn/just-do-it/releases/latest/download/JustDoIt-v1.0.0.zip)
+
+Use the `.exe` if you want the simplest install. Use the `.zip` if you want to keep the files together.
+
 ### Web Dashboard Hosting
 
 The repository now includes a GitHub Pages workflow that publishes the `web/` folder automatically from the `main` branch.
