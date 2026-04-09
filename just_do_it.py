@@ -9,9 +9,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from email.message import EmailMessage
 from datetime import datetime, timezone
 
-try:
-    import pygame; HAS_PYGAME = True
-except ImportError: HAS_PYGAME = False
+WINMM = ctypes.windll.winmm
 
 # ── IPC ──
 def send_ipc(cmd):
@@ -114,9 +112,9 @@ class FocusClient:
         self.auth_token = None
         self.user_uid = None
         self.user_email = ""
+        self.motivation_audio_alias = "jdi_motivation"
 
         # Remove local SQLite db usage, we are cloud now.
-        if HAS_PYGAME: pygame.mixer.init()
         self.dashboard_server = start_dashboard_server()
         
         # Try to auto-login if token exists
@@ -851,29 +849,34 @@ class FocusClient:
 
     def play_motivation(self):
         """Play the Shia LaBeouf motivation audio"""
-        if not HAS_PYGAME:
-            messagebox.showwarning("Audio", "Install pygame for audio: pip install pygame")
-            return
-        
         try:
-            if not pygame.mixer.get_init():
-                pygame.mixer.init()
-            
-            if os.path.exists("motivation.mp3"):
-                pygame.mixer.music.load("motivation.mp3")
-                pygame.mixer.music.play()
-            else:
+            audio_path = os.path.abspath("motivation.mp3")
+            if not os.path.exists(audio_path):
                 messagebox.showwarning("Audio", "motivation.mp3 not found")
+                return
+
+            self._mci_send(f'close {self.motivation_audio_alias}')
+            open_cmd = f'open "{audio_path}" alias {self.motivation_audio_alias}'
+            if self._mci_send(open_cmd) != 0:
+                open_cmd = f'open "{audio_path}" type mpegvideo alias {self.motivation_audio_alias}'
+                if self._mci_send(open_cmd) != 0:
+                    raise RuntimeError("Windows audio player could not open the file")
+
+            self._mci_send(f'play {self.motivation_audio_alias}')
         except Exception as e:
             messagebox.showerror("Audio Error", f"Could not play audio: {e}")
     
     def pause_motivation(self):
         """Pause the motivation audio"""
-        if HAS_PYGAME and pygame.mixer.get_init():
-            try:
-                pygame.mixer.music.pause()
-            except Exception:
-                pass
+        try:
+            if self._mci_send(f'pause {self.motivation_audio_alias}') != 0:
+                self._mci_send(f'resume {self.motivation_audio_alias}')
+        except Exception:
+            pass
+
+    def _mci_send(self, command):
+        result = WINMM.mciSendStringW(command, None, 0, None)
+        return int(result)
 
 def start_engine_subprocess():
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
