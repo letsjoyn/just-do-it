@@ -1,8 +1,10 @@
 import tkinter as tk
 from tkinter import messagebox, simpledialog
-import ctypes, random, sys, os, json, smtplib, sqlite3
+import ctypes, random, sys, os, json, smtplib, sqlite3, subprocess, math
 import threading, webbrowser, functools
 import urllib.request, urllib.error
+import signal
+import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from email.message import EmailMessage
 from datetime import datetime, timezone
@@ -34,6 +36,7 @@ FONTB    = ("Segoe UI", 10, "bold")
 
 SYNC_FILE = "sync_payload.json"
 LOCAL_ARCHIVE_FILE = "local_sessions.json"
+SESSION_STATE_FILE = "active_session.json"
 DASHBOARD_PORT = 8765
 DASHBOARD_URL  = "https://just-do-it-1fa38.web.app"
 
@@ -84,12 +87,13 @@ def start_dashboard_server():
     return server
 
 class FocusClient:
-    def __init__(self, root):
+    def __init__(self, root, engine_proc=None):
         self.root = root
         self.root.title("Just Do It")
         self.root.geometry("420x740")
         self.root.configure(bg=BG)
         self.root.resizable(False, False)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close_request)
 
         if not ctypes.windll.shell32.IsUserAnAdmin():
             messagebox.showerror("Error", "Run as Administrator.")
@@ -99,9 +103,12 @@ class FocusClient:
                         "steam.exe","discord.exe","chrome.exe","msedge.exe"]
         self.total_seconds = 1
         self.seconds_left = 0
+        self.session_target_seconds = 0
         self.is_running = False
         self.timer_job = None
         self.pending_termination_seconds = 0
+        self.engine_proc = engine_proc
+        self.engine_restart_notified = False
         self.unlock_method = "math"  # or "qr"
         
         self.auth_token = None
@@ -116,8 +123,48 @@ class FocusClient:
         self.load_local_auth()
         if self.auth_token:
             self.build()
+            self.restore_active_session_if_any()
         else:
             self.build_login()
+
+        # Keep checking that engine remains alive during active focus sessions.
+        self.root.after(2000, self.watch_engine)
+
+    def on_close_request(self):
+        if self.is_running:
+            messagebox.showwarning("Focus Active", "You cannot close the app while a focus session is running. Use Stop and unlock first.")
+            return
+        self.cleanup_and_exit()
+
+    def cleanup_and_exit(self):
+        try:
+            if self.dashboard_server:
+                self.dashboard_server.shutdown()
+        except Exception:
+            pass
+
+        try:
+            if self.engine_proc and self.engine_proc.poll() is None:
+                self.engine_proc.terminate()
+        except Exception:
+            pass
+
+        self.root.destroy()
+
+    def watch_engine(self):
+        if self.is_running:
+            engine_dead = (self.engine_proc is None or self.engine_proc.poll() is not None)
+            pipe_alive = (send_ipc("PING") == "Sent")
+
+            if engine_dead or not pipe_alive:
+                self.engine_proc = start_engine_subprocess()
+                mins_left = max(1, math.ceil(self.seconds_left / 60))
+                send_ipc(f"START {mins_left}")
+                if not self.engine_restart_notified:
+                    self.engine_restart_notified = True
+                    messagebox.showwarning("Engine Restarted", "Blocking engine was closed and has been restarted.")
+
+        self.root.after(2000, self.watch_engine)
 
     def save_local_auth(self):
         try:
@@ -134,6 +181,72 @@ class FocusClient:
                     self.user_uid = data.get("uid")
                     self.user_email = data.get("email")
             except: pass
+
+    def save_active_session_state(self):
+        if self.session_target_seconds <= 0:
+            return
+        try:
+            payload = {
+                "target_seconds": int(self.session_target_seconds),
+                "remaining_seconds": int(max(0, self.seconds_left)),
+                "unlock_method": self.unlock_method,
+                "saved_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            }
+            with open(SESSION_STATE_FILE, "w") as f:
+                json.dump(payload, f)
+        except Exception:
+            pass
+
+    def clear_active_session_state(self):
+        try:
+            if os.path.exists(SESSION_STATE_FILE):
+                os.remove(SESSION_STATE_FILE)
+        except Exception:
+            pass
+
+    def restore_active_session_if_any(self):
+        if not os.path.exists(SESSION_STATE_FILE):
+            return
+
+        try:
+            with open(SESSION_STATE_FILE, "r") as f:
+                state = json.load(f)
+
+            target = int(state.get("target_seconds", 0))
+            remaining = int(state.get("remaining_seconds", 0))
+            saved_method = state.get("unlock_method", "math")
+
+            if target <= 0 or remaining <= 0:
+                self.clear_active_session_state()
+                return
+
+            self.session_target_seconds = target
+            self.total_seconds = target
+            self.seconds_left = remaining
+            self.initial_mins = max(1, math.ceil(target / 60))
+            self.unlock_method = saved_method if saved_method in ("math", "qr") else "math"
+            if hasattr(self, "method_var"):
+                self.method_var.set(self.unlock_method)
+
+            self.is_running = True
+            self.engine_restart_notified = False
+
+            self.hr_entry.config(state=tk.DISABLED)
+            self.min_entry.config(state=tk.DISABLED)
+            self.start_btn.config(state=tk.DISABLED, bg=BORDER, fg=TXT2)
+            self.stop_btn.config(state=tk.NORMAL)
+            self.dashboard_btn.config(state=tk.DISABLED)
+            self.logout_btn.config(state=tk.DISABLED)
+
+            self.draw_clock()
+            self.timer_job = self.root.after(1000, self.timer_tick)
+
+            mins_left = max(1, math.ceil(self.seconds_left / 60))
+            send_ipc(f"START {mins_left}")
+            messagebox.showwarning("Session Recovered", "Detected an active focus session from last run. Timer has been restored.")
+        except Exception:
+            # If state is corrupted, remove it and continue normal startup.
+            self.clear_active_session_state()
 
     # ── Auth UI ──
     def build_login(self):
@@ -561,9 +674,11 @@ class FocusClient:
 
     def actually_start(self, mins):
         self.total_seconds = mins * 60
+        self.session_target_seconds = self.total_seconds
         self.seconds_left = self.total_seconds
         self.initial_mins = mins
         self.is_running = True
+        self.engine_restart_notified = False
 
         self.hr_entry.config(state=tk.DISABLED)
         self.min_entry.config(state=tk.DISABLED)
@@ -576,6 +691,7 @@ class FocusClient:
         if "No such file" in err:
             messagebox.showwarning("Engine", "C++ Engine offline. Website/app blocking disabled.")
 
+        self.save_active_session_state()
         self.draw_clock()
         self.timer_tick()
 
@@ -593,6 +709,7 @@ class FocusClient:
     def timer_tick(self):
         if self.is_running and self.seconds_left > 0:
             self.seconds_left -= 1
+            self.save_active_session_state()
             self.draw_clock()
             self.timer_job = self.root.after(1000, self.timer_tick)
         elif self.seconds_left == 0 and self.is_running:
@@ -601,8 +718,10 @@ class FocusClient:
     def finish(self):
         self.is_running = False
         self.timer_job = None
+        self.engine_restart_notified = False
+        completed_seconds = self.session_target_seconds or (self.initial_mins * 60)
         self.reset_ui()
-        self.log_session(self.initial_mins * 60, False)
+        self.log_session(completed_seconds, False)
         send_ipc("UNLOCK")
         self.open_dashboard()
         messagebox.showinfo("Done", f"Session complete! {self.initial_mins} min logged.\nDashboard opened in browser.")
@@ -620,7 +739,9 @@ class FocusClient:
             except Exception:
                 pass
             self.timer_job = None
-        self.pending_termination_seconds = max(0, (self.initial_mins * 60) - self.seconds_left)
+        target = self.session_target_seconds or (self.initial_mins * 60)
+        self.pending_termination_seconds = max(0, target - self.seconds_left)
+        self.save_active_session_state()
 
         if self.unlock_method == "qr":
             self.do_qr_scan()
@@ -651,6 +772,7 @@ class FocusClient:
                 if duration > 0: self.log_session(duration, True)
                 self.is_running = False
                 self.timer_job = None
+                self.engine_restart_notified = False
                 self.pending_termination_seconds = 0
                 self.reset_ui()
                 send_ipc("UNLOCK")
@@ -683,6 +805,7 @@ class FocusClient:
                 if duration > 0: self.log_session(duration, True)
                 self.is_running = False
                 self.timer_job = None
+                self.engine_restart_notified = False
                 self.pending_termination_seconds = 0
                 self.reset_ui()
                 send_ipc("UNLOCK")
@@ -700,6 +823,7 @@ class FocusClient:
         # QR flow cancelled; continue countdown from where terminate was requested.
         self.pending_termination_seconds = 0
         self.is_running = True
+        self.save_active_session_state()
         self.timer_job = self.root.after(1000, self.timer_tick)
 
     def open_dashboard(self):
@@ -708,6 +832,8 @@ class FocusClient:
 
     def reset_ui(self):
         self.pending_termination_seconds = 0
+        self.session_target_seconds = 0
+        self.clear_active_session_state()
         self.canvas.itemconfig(self.time_text, text="60:00", font=("Segoe UI", 36, "bold"))
         self.canvas.itemconfig(self.arc, extent=359.99)
         self.hr_entry.config(state=tk.NORMAL)
@@ -725,15 +851,29 @@ class FocusClient:
             pass
 
 def start_engine_subprocess():
-    import subprocess, atexit
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     engine_path = os.path.join(base_path, "engine.exe")
     if os.path.exists(engine_path):
-        proc = subprocess.Popen([engine_path], creationflags=subprocess.CREATE_NO_WINDOW)
-        atexit.register(proc.terminate)
+        try:
+            return subprocess.Popen([engine_path], creationflags=subprocess.CREATE_NO_WINDOW)
+        except Exception:
+            return None
+    return None
 
 if __name__ == "__main__":
-    start_engine_subprocess()
+    engine_proc = start_engine_subprocess()
     root = tk.Tk()
-    app = FocusClient(root)
+    app = FocusClient(root, engine_proc=engine_proc)
+
+    def handle_sigint(_sig, _frame):
+        if app.is_running:
+            messagebox.showwarning("Focus Active", "Ctrl+C is disabled while a focus session is running. Use Stop and unlock first.")
+            return
+        app.cleanup_and_exit()
+
+    try:
+        signal.signal(signal.SIGINT, handle_sigint)
+    except Exception:
+        pass
+
     root.mainloop()
