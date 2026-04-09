@@ -4,6 +4,11 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <set>
+#include <algorithm>
+#include <cctype>
+#include <cwctype>
+#include <mutex>
 // Removed thread & chrono using raw WinAPI instead
 #include <atomic>
 
@@ -13,19 +18,147 @@ const std::string REDIRECT_IP = "127.0.0.1";
 const std::string START_MARKER = "# --- FOCUS MODE START ---";
 const std::string END_MARKER = "# --- FOCUS MODE END ---";
 const std::string SCREEN_TIME_LOG = "screen_time.log";
+const std::string BLOCKED_ITEMS_FILE = "blocked_items.json";
 
-const std::vector<std::string> BLOCKED_SITES = {
+const std::vector<std::string> DEFAULT_BLOCKED_SITES = {
     "youtube.com", "www.youtube.com", "facebook.com", "www.facebook.com",
     "instagram.com", "www.instagram.com", "twitter.com", "www.twitter.com",
     "x.com", "www.x.com", "reddit.com", "www.reddit.com"
 };
 
-const std::vector<std::wstring> BLOCKED_APPS = {
+const std::vector<std::wstring> DEFAULT_BLOCKED_APPS = {
     L"steam.exe", L"discord.exe", L"msedge.exe", L"chrome.exe"
 };
 
 std::atomic<bool> isFocusModeActive(false);
 std::atomic<int> focusTimeRemaining(0);
+std::mutex blockedItemsMutex;
+std::vector<std::string> activeBlockedSites = DEFAULT_BLOCKED_SITES;
+std::vector<std::wstring> activeBlockedApps = DEFAULT_BLOCKED_APPS;
+
+std::string toLowerAscii(const std::string& in) {
+    std::string out = in;
+    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return out;
+}
+
+std::string trimAscii(const std::string& in) {
+    size_t start = 0;
+    while (start < in.size() && std::isspace(static_cast<unsigned char>(in[start]))) start++;
+    size_t end = in.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(in[end - 1]))) end--;
+    return in.substr(start, end - start);
+}
+
+std::wstring toWide(const std::string& s) {
+    return std::wstring(s.begin(), s.end());
+}
+
+std::string getExeDirectory() {
+    char path[MAX_PATH] = {0};
+    DWORD len = GetModuleFileNameA(NULL, path, MAX_PATH);
+    if (len == 0 || len == MAX_PATH) return ".";
+    std::string full(path, len);
+    size_t pos = full.find_last_of("\\/");
+    return (pos == std::string::npos) ? "." : full.substr(0, pos);
+}
+
+std::string getBlockedItemsPath() {
+    return getExeDirectory() + "\\" + BLOCKED_ITEMS_FILE;
+}
+
+std::vector<std::string> extractJsonStringValues(const std::string& content) {
+    std::vector<std::string> values;
+    std::string current;
+    bool inString = false;
+    bool escaped = false;
+
+    for (char ch : content) {
+        if (!inString) {
+            if (ch == '"') {
+                inString = true;
+                current.clear();
+            }
+            continue;
+        }
+
+        if (escaped) {
+            current.push_back(ch);
+            escaped = false;
+            continue;
+        }
+
+        if (ch == '\\') {
+            escaped = true;
+            continue;
+        }
+
+        if (ch == '"') {
+            inString = false;
+            values.push_back(current);
+            continue;
+        }
+
+        current.push_back(ch);
+    }
+
+    return values;
+}
+
+void loadBlockedItemsForSession() {
+    std::ifstream in(getBlockedItemsPath());
+    std::string raw;
+
+    if (in.is_open()) {
+        raw.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    }
+
+    std::set<std::string> sites;
+    std::set<std::wstring> apps;
+
+    if (!raw.empty()) {
+        auto values = extractJsonStringValues(raw);
+        for (auto value : values) {
+            value = toLowerAscii(trimAscii(value));
+            if (value.empty()) continue;
+
+            if (value.size() >= 4 && value.rfind(".exe") == value.size() - 4) {
+                apps.insert(toWide(value));
+                continue;
+            }
+
+            sites.insert(value);
+            if (value.rfind("www.", 0) == 0 && value.size() > 4) {
+                sites.insert(value.substr(4));
+            } else {
+                sites.insert("www." + value);
+            }
+        }
+    }
+
+    if (sites.empty()) {
+        sites.insert(DEFAULT_BLOCKED_SITES.begin(), DEFAULT_BLOCKED_SITES.end());
+    }
+    if (apps.empty()) {
+        apps.insert(DEFAULT_BLOCKED_APPS.begin(), DEFAULT_BLOCKED_APPS.end());
+    }
+
+    std::lock_guard<std::mutex> lock(blockedItemsMutex);
+    activeBlockedSites.assign(sites.begin(), sites.end());
+    activeBlockedApps.assign(apps.begin(), apps.end());
+}
+
+std::vector<std::string> getBlockedSitesSnapshot() {
+    std::lock_guard<std::mutex> lock(blockedItemsMutex);
+    return activeBlockedSites;
+}
+
+std::vector<std::wstring> getBlockedAppsSnapshot() {
+    std::lock_guard<std::mutex> lock(blockedItemsMutex);
+    return activeBlockedApps;
+}
 
 void unblockSites() {
     std::ifstream inFile(HOSTS_PATH);
@@ -53,9 +186,10 @@ void unblockSites() {
 void blockSites() {
     unblockSites();
     std::ofstream outFile(HOSTS_PATH, std::ios::app);
+    auto blockedSites = getBlockedSitesSnapshot();
     if (outFile.is_open()) {
         outFile << "\n" << START_MARKER << "\n";
-        for (const auto& site : BLOCKED_SITES) outFile << REDIRECT_IP << " " << site << "\n";
+        for (const auto& site : blockedSites) outFile << REDIRECT_IP << " " << site << "\n";
         outFile << END_MARKER << "\n";
         outFile.close();
         std::system("ipconfig /flushdns > nul 2>&1");
@@ -64,6 +198,7 @@ void blockSites() {
 
 void killDistractingProcesses() {
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    auto blockedApps = getBlockedAppsSnapshot();
     if (hSnap != INVALID_HANDLE_VALUE) {
         PROCESSENTRY32W pe;
         pe.dwSize = sizeof(PROCESSENTRY32W);
@@ -72,7 +207,7 @@ void killDistractingProcesses() {
                 std::wstring exeName = pe.szExeFile;
                 // Convert to lowercase roughly
                 for (auto& c : exeName) c = towlower(c);
-                for (const auto& blocked : BLOCKED_APPS) {
+                for (const auto& blocked : blockedApps) {
                     if (exeName == blocked) {
                         HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
                         if (hProcess != NULL) {
@@ -148,6 +283,8 @@ void startPipeServer() {
                 if (cmd.rfind("START ", 0) == 0) {
                     int mins = std::stoi(cmd.substr(6));
                     focusTimeRemaining = mins * 60;
+                    // Freeze blocked list for this session at start time.
+                    loadBlockedItemsForSession();
                     isFocusModeActive = true;
                     blockSites();
                     response = "STARTED";
