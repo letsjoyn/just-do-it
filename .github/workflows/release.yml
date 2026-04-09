@@ -35,7 +35,15 @@ jobs:
             --add-data "engine.exe;." `
             just_do_it.py
 
+      - name: Create portable ZIP (always)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item dist\JustDoIt.exe release\JustDoIt.exe -Force
+          Compress-Archive -Path release\* -DestinationPath JustDoIt-portable-${{ github.ref_name }}.zip -Force
+
       - name: Build installer
+        continue-on-error: true
         shell: pwsh
         run: |
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
@@ -43,7 +51,11 @@ jobs:
             $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe"
           }
           if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found" }
-          & $iscc "/DMyAppVersion=$env:GITHUB_REF_NAME" "installer\JustDoIt.iss"
+          $version = "$env:GITHUB_REF_NAME"
+          if ($version.StartsWith("v")) {
+            $version = $version.Substring(1)
+          }
+          & $iscc "/DMyAppVersion=$version" "installer\JustDoIt.iss"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -52,9 +64,13 @@ jobs:
           body: |
             ## Download the app
 
-            Primary download: `JustDoIt-Setup.exe`
+            Primary download: `JustDoIt-portable-${{ github.ref_name }}.zip`
+
+            If available in this release, use `JustDoIt-Setup.exe` for installer flow.
 
             The source code archives are generated automatically by GitHub and are not the app download.
+          fail_on_unmatched_files: false
           files: |
+            JustDoIt-portable-${{ github.ref_name }}.zip
             installer/output/JustDoIt-Setup.exe
           generate_release_notes: true
