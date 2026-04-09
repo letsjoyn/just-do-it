@@ -35,7 +35,7 @@ FONTB    = ("Segoe UI", 10, "bold")
 SYNC_FILE = "sync_payload.json"
 LOCAL_ARCHIVE_FILE = "local_sessions.json"
 DASHBOARD_PORT = 8765
-DASHBOARD_URL  = f"http://localhost:{DASHBOARD_PORT}"
+DASHBOARD_URL  = "https://just-do-it-1fa38.web.app"
 
 # ── Firebase Config ──
 FIREBASE_API_KEY = "AIzaSyB6BZ3TixkZunTAchX3EkWlEW-F-QRDXZY"
@@ -100,6 +100,8 @@ class FocusClient:
         self.total_seconds = 1
         self.seconds_left = 0
         self.is_running = False
+        self.timer_job = None
+        self.pending_termination_seconds = 0
         self.unlock_method = "math"  # or "qr"
         
         self.auth_token = None
@@ -329,7 +331,7 @@ class FocusClient:
         right_frame = tk.Frame(hdr, bg=CARD)
         right_frame.pack(side=tk.RIGHT, padx=15)
         self.dashboard_btn = tk.Button(right_frame, text="Dashboard", font=("Segoe UI",8,"bold"), bg=BG, fg=BLUE, bd=0, cursor="hand2", 
-                  command=lambda: webbrowser.open("http://localhost:8765"))
+                  command=self.open_dashboard)
         self.dashboard_btn.pack(side=tk.LEFT, padx=5, ipady=2)
         self.logout_btn = tk.Button(right_frame, text="Log Out", font=("Segoe UI",8,"bold"), bg=BG, fg=RED, bd=0, cursor="hand2", 
                   command=self.logout)
@@ -592,12 +594,13 @@ class FocusClient:
         if self.is_running and self.seconds_left > 0:
             self.seconds_left -= 1
             self.draw_clock()
-            self.root.after(1000, self.timer_tick)
+            self.timer_job = self.root.after(1000, self.timer_tick)
         elif self.seconds_left == 0 and self.is_running:
             self.finish()
 
     def finish(self):
         self.is_running = False
+        self.timer_job = None
         self.reset_ui()
         self.log_session(self.initial_mins * 60, False)
         send_ipc("UNLOCK")
@@ -606,6 +609,19 @@ class FocusClient:
 
     # ── Terminate (uses pre-selected method) ──
     def terminate(self):
+        if not self.is_running:
+            return
+
+        # Freeze timer at the moment user requests early termination.
+        self.is_running = False
+        if self.timer_job:
+            try:
+                self.root.after_cancel(self.timer_job)
+            except Exception:
+                pass
+            self.timer_job = None
+        self.pending_termination_seconds = max(0, (self.initial_mins * 60) - self.seconds_left)
+
         if self.unlock_method == "qr":
             self.do_qr_scan()
         else:
@@ -631,9 +647,11 @@ class FocusClient:
         def check():
             if ent.get().strip() == answer:
                 win.destroy()
-                duration = (self.initial_mins * 60) - self.seconds_left
+                duration = getattr(self, "pending_termination_seconds", (self.initial_mins * 60) - self.seconds_left)
                 if duration > 0: self.log_session(duration, True)
                 self.is_running = False
+                self.timer_job = None
+                self.pending_termination_seconds = 0
                 self.reset_ui()
                 send_ipc("UNLOCK")
                 self.open_dashboard()
@@ -661,9 +679,11 @@ class FocusClient:
             if data == "UNLOCK_FOCUS":
                 cap.release(); cv2.destroyAllWindows()
                 self.root.deiconify()
-                duration = (self.initial_mins * 60) - self.seconds_left
+                duration = getattr(self, "pending_termination_seconds", (self.initial_mins * 60) - self.seconds_left)
                 if duration > 0: self.log_session(duration, True)
                 self.is_running = False
+                self.timer_job = None
+                self.pending_termination_seconds = 0
                 self.reset_ui()
                 send_ipc("UNLOCK")
                 self.open_dashboard()
@@ -677,11 +697,17 @@ class FocusClient:
         cap.release(); cv2.destroyAllWindows()
         self.root.deiconify()
 
+        # QR flow cancelled; continue countdown from where terminate was requested.
+        self.pending_termination_seconds = 0
+        self.is_running = True
+        self.timer_job = self.root.after(1000, self.timer_tick)
+
     def open_dashboard(self):
         """Open the stats dashboard in the default browser"""
         webbrowser.open(DASHBOARD_URL)
 
     def reset_ui(self):
+        self.pending_termination_seconds = 0
         self.canvas.itemconfig(self.time_text, text="60:00", font=("Segoe UI", 36, "bold"))
         self.canvas.itemconfig(self.arc, extent=359.99)
         self.hr_entry.config(state=tk.NORMAL)

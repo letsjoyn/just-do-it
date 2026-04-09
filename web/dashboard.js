@@ -24,10 +24,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const loginContainer = document.getElementById('login-container');
     const dashContainer = document.getElementById('dashboard-container');
     const siteFooter = document.getElementById('site-footer');
+    const topNote = document.querySelector('.top-note');
     const loginForm = document.getElementById('login-form');
     const loginError = document.getElementById('login-error');
     const logoutBtn = document.getElementById('logout-btn');
     const clearFilterBtn = document.getElementById('clear-filter');
+    const userEmail = document.getElementById('user-email');
 
     function setViewState(isAuthenticated) {
         const shiaMeme = document.getElementById('shia-meme');
@@ -37,17 +39,21 @@ document.addEventListener("DOMContentLoaded", () => {
             logoutBtn.style.display = 'block';
             if (shiaMeme) shiaMeme.style.display = 'none';
             if (siteFooter) siteFooter.style.display = 'none';
+            if (topNote) topNote.style.display = 'none';
         } else {
-            loginContainer.style.display = 'block';
+            loginContainer.style.display = 'flex';
             dashContainer.style.display = 'none';
             if (shiaMeme) shiaMeme.style.display = 'block';
             if (siteFooter) siteFooter.style.display = 'flex';
+            if (topNote) topNote.style.display = 'block';
+            if (userEmail) userEmail.textContent = '';
         }
     }
 
     onAuthStateChanged(auth, (user) => {
         if (user) {
             currentUser = user;
+            if (userEmail) userEmail.textContent = user.email || user.uid;
             setViewState(true);
             loadData(currentUser.uid);
         } else {
@@ -162,17 +168,23 @@ function renderDashboard() {
 
     tableBody.innerHTML = '';
     if (sessionsToRender.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#666;font-style:italic;">No records found.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#666;font-style:italic;">No records found.</td></tr>';
     } else {
         sessionsToRender.forEach(session => {
             const d = new Date(session.date);
             const isValidDate = !Number.isNaN(d.getTime());
-            const dateStr = isValidDate
-                ? d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-                : 'Unknown date';
+            const dateStr = isValidDate ? d.toLocaleDateString() : 'Unknown date';
             
             const secs = session.duration_seconds || (session.minutes ? session.minutes * 60 : 0);
             const durStr = formatDuration(secs);
+
+            let timeRangeStr = 'Unknown';
+            if (isValidDate) {
+                const endTime = d;
+                const startTime = new Date(d.getTime() - Math.max(0, secs) * 1000);
+                const timeOpts = { hour: '2-digit', minute: '2-digit' };
+                timeRangeStr = `${startTime.toLocaleTimeString([], timeOpts)} - ${endTime.toLocaleTimeString([], timeOpts)}`;
+            }
             
             const method = session.unlock_method || 'math';
             
@@ -182,7 +194,8 @@ function renderDashboard() {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td style="font-weight: bold; color: #333;">${dateStr}</td>
-                <td style="font-family: monospace; font-size: 1.1rem; color: #000;">${durStr}</td>
+                <td style="color:#334155;">${timeRangeStr}</td>
+                <td style="font-size: 1.1rem; color: #000;">${durStr}</td>
                 <td><span class="badge" style="background:#f0f0f0; border: 1px solid #ccc; color:#000;">${method}</span></td>
                 <td>${earlyBadge}</td>
             `;

@@ -2,152 +2,473 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Focus Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Just Do it - Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        /* Minimalist reset */
-        * { box-sizing: border-box; }
-        body { 
-            margin: 0; padding: 0; 
-            background: #fff; 
-            color: #424242; 
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            display: flex; flex-direction: column; min-height: 100vh; 
+        :root {
+            --app-font: 'Inter', system-ui, -apple-system, sans-serif;
         }
-        .container { 
-            flex: 1; margin: 0 auto; padding: 2rem; 
-            width: 100%; max-width: 900px; 
-            display: flex; flex-direction: column; gap: 2rem; 
+
+        *, *::before, *::after { box-sizing: border-box; }
+
+        html, body, button, input, select, textarea, table, th, td {
+            font-family: var(--app-font);
         }
-        h1, h2, h3 { 
-            margin: 0; font-weight: 500; 
-            color: #333; 
-        }
-        h1 { 
-            font-size: 1.5rem; 
-            border-bottom: 1px solid #e0e0e0; 
-            padding-bottom: 1rem; width: 100%; 
-        }
-        
-        button { 
-            background: #387ed1; color: #fff; 
-            border: none; padding: 0.6rem 1.2rem; 
-            border-radius: 3px;
-            font-size: 0.9rem;
-            font-weight: 500; cursor: pointer; transition: background 0.2s; 
-        }
-        button:hover { background: #2c68b0; }
-        
-        input { 
-            border: 1px solid #e0e0e0; 
-            padding: 0.75rem; width: 100%; margin-bottom: 1rem; 
-            font-size: 1rem; border-radius: 3px; 
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: var(--app-font);
+            background: #f5f7fb;
             color: #424242;
+        }
+
+        .brand {
+            position: fixed;
+            top: 1.25rem;
+            left: 1.25rem;
+            font-size: 1.55rem;
+            font-weight: 700;
+            letter-spacing: -0.6px;
+            color: #1f2937;
+            z-index: 20;
+        }
+
+        .top-note {
+            position: fixed;
+            top: 1.2rem;
+            right: 1.2rem;
+            max-width: 420px;
+            border: 1px solid #fecaca;
+            background: #fff1f2;
+            color: #b91c1c;
+            border-radius: 4px;
+            padding: 0.68rem 0.82rem;
+            font-size: 0.82rem;
+            line-height: 1.36;
+            z-index: 20;
+        }
+
+        #login-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 1rem;
+        }
+
+        .login-shell {
+            width: min(920px, 100%);
+            background: #ffffff;
+            border: 1px solid #e6ebf2;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            overflow: hidden;
+        }
+
+        .login-info {
+            padding: 2.2rem;
+            background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+            border-right: 1px solid #eef2f7;
+        }
+
+        .login-info h1 {
+            margin: 0;
+            font-size: 1.45rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .login-subtitle {
+            margin: 0.55rem 0 1.5rem;
+            color: #64748b;
+            font-size: 0.98rem;
+            line-height: 1.45;
+        }
+
+        .feature-list {
+            display: grid;
+            gap: 0.7rem;
+        }
+
+        .feature-item {
+            border: 1px solid #e6ebf2;
+            background: #fff;
+            border-radius: 4px;
+            padding: 0.75rem 0.85rem;
+            font-size: 0.9rem;
+            color: #334155;
+        }
+
+        .feature-title {
+            display: block;
+            font-weight: 600;
+            color: #1e3a8a;
+            margin-bottom: 0.15rem;
+        }
+
+        .login-form-wrap {
+            padding: 2.2rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        #login-error {
+            display: none;
+            margin-bottom: 1rem;
+            border: 1px solid #fecaca;
+            background: #fff1f2;
+            color: #b91c1c;
+            border-radius: 4px;
+            padding: 0.7rem 0.8rem;
+            font-size: 0.86rem;
+        }
+
+        .input-group {
+            margin-bottom: 1.1rem;
+        }
+
+        .input-group label {
+            display: block;
+            color: #475569;
+            font-size: 0.9rem;
+            margin-bottom: 0.45rem;
+        }
+
+        .input-group input {
+            width: 100%;
+            border: 1px solid #d9e0ea;
+            border-radius: 4px;
+            padding: 0.78rem 0.85rem;
+            font-size: 0.98rem;
+            color: #1f2937;
+            background: #fff;
             font-family: inherit;
         }
-        input:focus { outline: none; border-color: #387ed1; }
 
-        /* Login */
-        #login-container { 
-            max-width: 400px; margin: 8rem auto; 
-            padding: 3rem 2rem; width: 100%; text-align: center;
+        .input-group input:focus {
+            outline: none;
+            border-color: #387ed1;
+            box-shadow: 0 0 0 3px rgba(56, 126, 209, 0.12);
         }
-        #login-container h1 { margin-bottom: 0.25rem; border-bottom: 0; padding-bottom: 0; font-size: 2rem; font-weight: 500; color: #424242; }
-        .login-subtitle { color: #888; font-size: 1rem; margin-bottom: 2.5rem; margin-top: 0; }
-        .input-group { text-align: left; margin-bottom: 1.5rem; }
-        .input-group label { display: block; font-size: 0.85rem; color: #666; margin-bottom: 0.5rem; }
-        #login-container input { padding: 0.85rem; border: 1px solid #e0e0e0; margin-bottom: 0; }
-        #login-error { color: #d32f2f; background: #ffebee; padding: 0.75rem; font-size: 0.85rem; margin-bottom: 1.5rem; display: none; text-align: center; border-radius: 3px; }
-        #status-msg { margin-bottom: 1rem; padding: 0.75rem; border: 1px solid #e0e0e0; background: #f9f9f9; text-align: center; font-size: 0.85rem; display: none; border-radius: 3px;}
-        #error-msg { display: none; color: #d32f2f; background: #ffebee; border: 1px solid #ef9a9a; padding: 1rem; border-radius: 3px; margin-bottom: 1rem;}
 
-        /* Stats & Cards */
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .stat-card { 
-            border: 1px solid #e0e0e0; 
-            padding: 1rem 1.5rem; display: flex; flex-direction: column; 
-            align-items: flex-start; justify-content: center; 
+        .login-btn {
+            width: 100%;
+            border: none;
+            border-radius: 4px;
+            background: #387ed1;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 500;
+            padding: 0.78rem;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .login-btn:hover {
+            background: #2e6db6;
+        }
+
+        #site-footer {
+            margin-top: 1.25rem;
+            text-align: center;
+            font-size: 0.83rem;
+            color: #7c8798;
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+        }
+
+        #site-footer a {
+            color: #387ed1;
+            text-decoration: none;
+        }
+
+        #site-footer a:hover {
+            text-decoration: underline;
+        }
+
+        .divider { color: #cbd5e1; }
+
+        /* Dashboard styles */
+        #dashboard-container {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+            display: none;
+            flex-direction: column;
+            gap: 1.4rem;
+        }
+
+        .header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 1rem;
+        }
+
+        .header-actions h1 { margin: 0; font-size: 1.5rem; }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+        }
+
+        #user-email {
+            display: inline-block;
+            font-size: 0.86rem;
+            color: #64748b;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            border-radius: 4px;
+            padding: 0.34rem 0.55rem;
+            max-width: 260px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #logout-btn {
+            border: none;
+            background: #387ed1;
+            color: #fff;
+            padding: 0.5rem 0.9rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #status-msg, #error-msg {
+            display: none;
+            border: 1px solid #dbe4f0;
+            background: #f8fbff;
+            border-radius: 4px;
+            padding: 0.8rem;
+            font-size: 0.9rem;
+        }
+
+        #error-msg {
+            border-color: #fecaca;
+            background: #fff1f2;
+            color: #b91c1c;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-card {
+            border: 1px solid #e6ebf2;
+            border-radius: 4px;
+            padding: 1rem 1.1rem;
+            background: #fff;
+        }
+
+        .stat-title {
+            color: #64748b;
+            text-transform: uppercase;
+            font-size: 0.74rem;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.3rem;
+        }
+
+        .stat-value {
+            font-size: 1.7rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .heatmap-wrapper {
+            border: 1px solid #e6ebf2;
+            border-radius: 4px;
+            padding: 1rem;
+            display: none;
+            flex-direction: column;
+            gap: 0.9rem;
+            background: #fff;
+            overflow-x: auto;
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-rows: repeat(7, 1fr);
+            gap: 3px;
+            grid-auto-flow: column;
+            grid-auto-columns: 14px;
+            padding-bottom: 0.5rem;
+        }
+
+        .heatmap-cell {
+            width: 14px;
+            height: 14px;
+            border-radius: 2px;
+            border: 1px solid transparent;
+            cursor: pointer;
+        }
+
+        .heatmap-cell.selected { border-color: #1f2937; }
+        .heatmap-legend { display: flex; align-items: center; gap: 4px; color: #64748b; font-size: 0.75rem; }
+        .color-0 { background: #f1f5f9; }
+        .color-1 { background: #dbeafe; }
+        .color-2 { background: #bfdbfe; }
+        .color-3 { background: #93c5fd; }
+        .color-4 { background: #60a5fa; }
+        .color-5 { background: #3b82f6; }
+
+        #filter-info {
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #dbe4f0;
+            background: #f8fbff;
+            border-radius: 4px;
+            padding: 0.7rem 0.85rem;
+            color: #1e3a8a;
+            font-size: 0.9rem;
+        }
+
+        #clear-filter { cursor: pointer; font-weight: 600; }
+
+        .table-wrap {
+            border: 1px solid #e6ebf2;
             border-radius: 4px;
             background: #fff;
-            transition: background 0.2s;
+            overflow-x: auto;
         }
-        .stat-card:hover { background: #f9f9f9; }
-        .stat-title { font-size: 0.75rem; color: #888; margin-bottom: 0.25rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
-        .stat-value { font-size: 1.8rem; font-weight: 500; color: #333; }
-        
-        /* Table */
-        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; }
-        th, td { padding: 1rem; border-bottom: 1px solid #e0e0e0; }
-        th { font-weight: 500; color: #777; font-size: 0.85rem; text-transform: uppercase; background: #fafafa; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+        th, td {
+            padding: 0.95rem;
+            border-bottom: 1px solid #edf2f7;
+            text-align: left;
+        }
+
+        th {
+            text-transform: uppercase;
+            font-size: 0.78rem;
+            letter-spacing: 0.5px;
+            color: #64748b;
+            background: #f8fafc;
+        }
+
         tr:last-child td { border-bottom: none; }
-        tr:hover { background: #fafafa; }
-        tr { transition: background 0.1s; }
-        
-        .badge { font-size: 0.75rem; padding: 0.2rem 0.6rem; font-weight: 500; border-radius: 3px; }
-        .yes { background: #f0f0f0; color: #424242; border: 1px solid #e0e0e0; }
-        .no { background: transparent; color: #999; border: 1px solid #eee; }
-        
-        /* Heatmap */
-        .heatmap-wrapper { border: 1px solid #e0e0e0; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; overflow-x: auto; border-radius: 4px; }
-        .heatmap-grid { display: grid; grid-template-rows: repeat(7, 1fr); gap: 3px; grid-auto-flow: column; grid-auto-columns: 14px; padding-bottom: 0.5rem; }
-        .heatmap-cell { width: 14px; height: 14px; border-radius: 2px; background: #eee; cursor: pointer; transition: 0.1s all; border: 1px solid transparent; }
-        .heatmap-cell:hover { border-color: #999; }
-        .heatmap-cell.selected { border: 1px solid #333; transform: scale(1.1); box-shadow: 0 0 2px rgba(0,0,0,0.2); }
-        .heatmap-legend { display: flex; flex-direction: row; align-items: center; gap: 4px; font-size: 0.75rem; color: #777; }
-        
-        /* Modifiers - Zerodha Blue Palette */
-        .color-0 { background: #f0f0f0; }
-        .color-1 { background: #dce7f5; }
-        .color-2 { background: #b8d0ed; }
-        .color-3 { background: #6da2e0; }
-        .color-4 { background: #387ed1; }
-        .color-5 { background: #2665b0; } 
-        
-        /* Extras */
-        .header-actions { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; padding-bottom: 1rem; }
-        .header-actions h1 { border-bottom: 0; padding-bottom: 0; width: auto; color: #333; }
-        #filter-info { display: flex; justify-content: space-between; align-items: center; background: #f5f8fc; color: #387ed1; padding: 0.75rem 1rem; border: 1px solid #dce7f5; font-size: 0.9rem; margin-bottom: -1rem; display: none; border-radius: 3px; }
-        #clear-filter { font-size: 1rem; cursor: pointer; color: #387ed1; padding: 0 0.5rem; font-weight: 600; }
-        #clear-filter:hover { color: #2665b0; }
+
+        .badge {
+            display: inline-block;
+            border: 1px solid #d1d5db;
+            border-radius: 3px;
+            padding: 0.15rem 0.45rem;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: #334155;
+            background: #f8fafc;
+        }
+
+        .yes { color: #0f766e; border-color: #99f6e4; background: #f0fdfa; }
+        .no { color: #64748b; border-color: #e2e8f0; background: #f8fafc; }
+
+        #shia-meme {
+            position: fixed;
+            left: -95px;
+            bottom: -80px;
+            height: 450px;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        @media (max-width: 900px) {
+            .brand { font-size: 1.3rem; }
+            .top-note {
+                left: 1rem;
+                right: 1rem;
+                max-width: none;
+            }
+            .login-shell { grid-template-columns: 1fr; }
+            .login-info { border-right: 0; border-bottom: 1px solid #eef2f7; }
+            .stats-grid { grid-template-columns: 1fr; }
+            #shia-meme { height: 320px; left: -85px; bottom: -70px; }
+        }
     </style>
 </head>
 <body>
-    <div style="position: absolute; top: 2rem; left: 2rem; font-size: 1.2rem; font-weight: 600; color: #424242; letter-spacing: -0.5px;">Just Do it</div>
-    
-    <div id="login-container">
-        <h1 style="font-size: 1.4rem; margin-bottom: 0.5rem; font-weight: 500;">Login</h1>
-        <p class="login-subtitle" style="margin-bottom: 2rem;">Track your focus dashboard</p>
-        <div id="login-error"></div>
-        <form id="login-form">
-            <div class="input-group">
-                <label for="email">Email</label>
-                <input type="email" id="email" required placeholder="">
-            </div>
-            <div class="input-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" required placeholder="">
-            </div>
-            <button type="submit" style="width: 100%; padding: 0.85rem; font-size: 1rem; margin-top: 1rem; font-weight: 500;">Login</button>
-        </form>
+    <div class="brand">Just Do it</div>
+    <div class="top-note">First clone the project from GitHub, then sign up from the app. After that, use the app normally and view stats anytime from the website or instantly using the Dashboard button.</div>
 
-        <div id="site-footer" style="margin-top: 2rem; text-align: center; font-size: 0.8rem; color: #888; display: flex; flex-direction: column; gap: 0.6rem;">
-            <div>Open source on <a href="https://github.com/letsjoyn/just-do-it" style="color: #387ed1; text-decoration: none;" target="_blank">GitHub</a></div>
-            <div style="display: flex; justify-content: center; gap: 0.8rem;">
-                <a href="#" style="color: #387ed1; text-decoration: none;">Privacy Policy</a>
-                <span style="color: #e0e0e0;">|</span>
-                <a href="#" style="color: #387ed1; text-decoration: none;">Terms</a>
+    <div id="login-container">
+        <div class="login-shell">
+            <div class="login-info">
+                <h1>Welcome back</h1>
+                <p class="login-subtitle">Sign up from the app once, then use this dashboard anytime to check your focus consistency and session quality.</p>
+                <div class="feature-list">
+                    <div class="feature-item">
+                        <span class="feature-title">Hard Math + QR Unlock</span>
+                        End early only with deliberate friction, not one random click.
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-title">Exact Time Tracking</span>
+                        Every session is saved in seconds with early termination status.
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-title">Heatmap Insights</span>
+                        See streak consistency by day and click any date to inspect sessions.
+                    </div>
+                </div>
+            </div>
+
+            <div class="login-form-wrap">
+                <h1 style="font-size: 1.4rem; margin: 0 0 0.5rem;">Login</h1>
+                <p class="login-subtitle" style="margin: 0 0 1.5rem;">Track your focus dashboard</p>
+                <div id="login-error"></div>
+                <form id="login-form">
+                    <div class="input-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" required>
+                    </div>
+                    <button type="submit" class="login-btn">Login</button>
+                </form>
+
+                <div id="site-footer">
+                    <div>Open source on <a href="https://github.com/letsjoyn/just-do-it" target="_blank">GitHub</a></div>
+                    <div>
+                        <a href="#">Privacy Policy</a>
+                        <span class="divider">&nbsp;|&nbsp;</span>
+                        <a href="#">Terms</a>
+                    </div>  
+                </div>
             </div>
         </div>
     </div>
 
-    <div id="dashboard-container" class="container" style="display: none;">
+    <div id="dashboard-container">
         <div class="header-actions">
-            <h1>Just Do it <span style="color: #888; font-weight: 400; font-size: 1.2rem;">/ Dashboard</span></h1>
-            <button id="logout-btn">Log Out</button>
+            <h1>Just Do it <span style="color:#94a3b8;font-weight:500;">/ Dashboard</span></h1>
+            <div class="header-right">
+                <span id="user-email" title="Logged in email"></span>
+                <button id="logout-btn">Log Out</button>
+            </div>
         </div>
-        
+
         <div id="status-msg"></div>
         <div id="error-msg"></div>
 
@@ -162,20 +483,27 @@
             </div>
         </div>
 
-        <div class="heatmap-wrapper" id="heatmap-wrapper" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.5rem;">
-                <h3 style="font-size: 0.9rem; color: #555; font-weight: 500;">Activity Heatmap</h3>
+        <div class="heatmap-wrapper" id="heatmap-wrapper">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+                <h3 style="margin:0;font-size:0.92rem;color:#475569;">Activity Heatmap</h3>
                 <div class="heatmap-legend">
-                    Less <div class="heatmap-cell color-1"></div><div class="heatmap-cell color-2"></div><div class="heatmap-cell color-3"></div><div class="heatmap-cell color-4"></div><div class="heatmap-cell color-5"></div> More
+                    Less
+                    <div class="heatmap-cell color-1"></div>
+                    <div class="heatmap-cell color-2"></div>
+                    <div class="heatmap-cell color-3"></div>
+                    <div class="heatmap-cell color-4"></div>
+                    <div class="heatmap-cell color-5"></div>
+                    More
                 </div>
             </div>
-            <div class="heatmap-container" style="display: flex; flex-direction: column;">
-                <div class="months-label" id="months-label" style="display: flex; position: relative; height: 1.2rem; margin-left: 24px; font-size: 0.75rem; color: #777;"></div>
-                <div class="days-and-grid" style="display: flex; flex-direction: row; gap: 0.5rem; align-items: stretch;">
-                    <div class="days-label" style="display: grid; grid-template-rows: repeat(7, 1fr); gap: 3px; font-size: 0.7rem; color: #777; padding-bottom: 0.5rem; align-items: center; justify-items: end;">
-                        <span style="grid-row: 2;">Mon</span>
-                        <span style="grid-row: 4;">Wed</span>
-                        <span style="grid-row: 6;">Fri</span>
+
+            <div style="display:flex;flex-direction:column;">
+                <div id="months-label" style="position:relative;height:1.2rem;margin-left:24px;color:#64748b;font-size:0.75rem;"></div>
+                <div style="display:flex;gap:0.5rem;align-items:stretch;">
+                    <div style="display:grid;grid-template-rows:repeat(7,1fr);gap:3px;font-size:0.7rem;color:#64748b;align-items:center;justify-items:end;padding-bottom:0.5rem;">
+                        <span style="grid-row:2;">Mon</span>
+                        <span style="grid-row:4;">Wed</span>
+                        <span style="grid-row:6;">Fri</span>
                     </div>
                     <div class="heatmap-grid" id="heatmap"></div>
                 </div>
@@ -183,29 +511,31 @@
         </div>
 
         <div id="filter-info">
-            <span id="filter-text" style="font-weight: 500;"></span>
+            <span id="filter-text" style="font-weight:500;"></span>
             <span id="clear-filter" title="Clear Filter">&#10005;</span>
         </div>
 
-        <div style="border: 1px solid #e0e0e0; border-radius: 4px; overflow-x: auto;">
+        <div class="table-wrap">
             <table>
                 <thead>
                     <tr>
                         <th>Date</th>
+                        <th>From - To</th>
                         <th>Duration</th>
                         <th>Unlock Method</th>
                         <th>Early Term</th>
                     </tr>
                 </thead>
                 <tbody id="session-table-body">
-                    <tr><td colspan="4" style="text-align:center; color:#999; font-style: italic;">Loading data...</td></tr>
+                    <tr>
+                        <td colspan="5" style="text-align:center;color:#94a3b8;font-style:italic;">Loading data...</td>
+                    </tr>
                 </tbody>
             </table>
         </div>
     </div>
 
-    <!-- Shia Meme -->
-    <img src="output-onlinepngtools.png" id="shia-meme" alt="Just Do It" style="position: fixed; left: -30px; bottom: -80px; height: 450px; z-index: 5; pointer-events: none; transition: transform 0.3s ease;">
+    <img src="output-onlinepngtools.png" id="shia-meme" alt="Just Do It">
 
     <script type="module" src="dashboard.js"></script>
 </body>
