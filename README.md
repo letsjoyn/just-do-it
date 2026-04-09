@@ -101,27 +101,27 @@ Admin rights are required because the engine can update host blocking and manage
 
 ```mermaid
 flowchart LR
-		A[User starts timer in desktop app] --> B[just_do_it.py session runtime]
-		B --> C[engine.exe enforce block rules]
-		B --> D[Collect elapsed seconds and unlock method]
+	A["User starts timer in desktop app"] --> B["just_do_it.py session runtime"]
+	B --> C["engine.exe enforce block rules"]
+	B --> D["Collect elapsed seconds and unlock method"]
 
-		D --> E{Session ended how?}
-		E -->|Timer completed| F[early_terminated=false]
-		E -->|Stopped before target + unlock| G[early_terminated=true]
+	D --> E{"Session ended how"}
+	E -->|Timer completed| F["early_terminated false"]
+	E -->|Stopped before target and unlocked| G["early_terminated true"]
 
-		F --> H[Create session payload]
-		G --> H
+	F --> H["Create session payload"]
+	G --> H
 
-		H --> I[sync_payload.json queue]
-		I --> J{Network/API success?}
-		J -->|Yes| K[Write to Firestore users/{uid}/sessions]
-		J -->|No| L[Keep in local queue for retry]
-		L --> I
+	H --> I["sync_payload.json queue"]
+	I --> J{"Network or API success"}
+	J -->|Yes| K["Write to Firestore user sessions collection"]
+	J -->|No| L["Keep in local queue for retry"]
+	L --> I
 
-		K --> M[Hosted website dashboard.js]
-		M --> N[Firebase Auth user session]
-		N --> O[Read Firestore by logged in uid]
-		O --> P[Render heatmap + table + KPIs]
+	K --> M["Hosted website dashboard.js"]
+	M --> N["Firebase Auth user session"]
+	N --> O["Read Firestore by logged-in uid"]
+	O --> P["Render heatmap, table, and KPIs"]
 ```
 
 ## Runtime sequence details
