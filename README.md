@@ -2,76 +2,144 @@
 
 Focus better.
 
-Strict focus timer + blocker + web dashboard.
+This project is a strict focus suite with:
 
-## What this project does
+- a desktop timer app,
+- a native Windows blocker engine,
+- cloud sync to Firebase,
+- and a web dashboard.
 
-- Runs a desktop focus timer.
-- Blocks distracting sites and apps during focus mode.
-- Requires an unlock challenge for early exit (Hard Math or QR Scan).
-- Saves exact session duration in seconds.
-- Syncs sessions to Firebase Firestore.
-- Shows analytics in a minimal web dashboard.
+## Main features
 
-## Core features
-
-- Hard Math unlock
-- QR unlock
+- Hard Math unlock challenge
+- QR unlock challenge
 - Early termination tracking
-- Firebase Authentication login
-- Firebase Firestore session history
-- Heatmap + session table dashboard
-
-## Tech stack
-
-- Desktop: Python (Tkinter)
-- Blocking engine: C++ (Windows)
-- Cloud: Firebase Auth + Firestore + Hosting
-- Web: HTML + CSS + Vanilla JS
+- Exact duration tracking in seconds
+- Website and app blocking during focus
+- Firebase Auth login
+- Firestore session storage
+- Dashboard heatmap and session table
 
 ## Project structure
 
 ```text
-just_do_it.py               # desktop app
-engine.cpp                  # native blocker engine
-installer/JustDoIt.iss      # installer config
+just_do_it.py               # desktop app entry point
+engine.cpp                  # C++ blocking engine source
+engine.exe                  # compiled blocker engine
 web/index.html              # dashboard UI
 web/dashboard.js            # dashboard logic
-.github/workflows/release.yml  # release build pipeline
+web/output-onlinepngtools.png
 firebase.json               # firebase hosting config
+.firebaserc                # firebase project mapping
 ```
 
-## Run locally
+## How users should run it (manual method)
 
-1. Build `engine.cpp` into `engine.exe`.
-2. Run:
+Use this method instead of downloading an unsigned installer. This avoids most Smart App Control issues.
 
-```bash
-python just_do_it.py
+### 1. Install prerequisites
+
+- Windows 10/11
+- Python 3.10+ (with `py` command available)
+- Git (optional, but recommended)
+- Firebase CLI (only needed if deploying dashboard)
+
+### 2. Get the code
+
+Option A: clone with git
+
+```powershell
+git clone https://github.com/letsjoyn/just-do-it.git
+cd just-do-it
 ```
 
-3. Login and start focus sessions.
+Option B: download ZIP from GitHub source and extract.
 
-## Dashboard hosting
+### 3. Install Python dependencies
 
-Live site is deployed on Firebase Hosting.
+Run in project root:
 
-Deploy command:
-
-```bash
-firebase deploy --only hosting --project just-do-it-1fa38
+```powershell
+py -m pip install --upgrade pip
+py -m pip install qrcode[pil] opencv-python pygame
 ```
 
-## Downloads
+Notes:
 
-Desktop users should download the installer from Releases:
+- `qrcode[pil]` is needed for QR unlock generation.
+- `opencv-python` is needed for webcam QR scan.
+- `pygame` is optional for audio features, but recommended.
 
-- `JustDoIt-Setup.exe`
+### 4. Run as Administrator
 
-Release page:
+The blocker engine edits hosts and manages processes, so admin rights are required.
 
-- https://github.com/letsjoyn/just-do-it/releases
+Open terminal as Administrator, then:
 
-## Note on Windows blocking
+```powershell
+cd path\to\just-do-it
+py just_do_it.py
+```
 
-If Smart App Control blocks the installer, the long-term fix is code signing.
+### 5. Use the app
+
+1. Log in or sign up in desktop app.
+2. Set duration.
+3. Choose unlock method (Hard Math or QR).
+4. Start focus mode.
+5. Click Dashboard to view analytics.
+
+## Dashboard (web)
+
+### Live hosted URL
+
+```text
+https://just-do-it-1fa38.web.app
+```
+
+### Deploy updates to Firebase Hosting
+
+```powershell
+firebase login
+firebase use just-do-it-1fa38
+firebase deploy --only hosting
+```
+
+## Data model (session fields)
+
+Each session contains:
+
+- `date`
+- `duration_seconds`
+- `early_terminated`
+- `unlock_method`
+- `blocked_items`
+- `screen_time`
+
+## Local files generated at runtime
+
+These are created automatically while using the app:
+
+- `auth.json` (local auth cache)
+- `sync_payload.json` (pending sync queue)
+- `local_sessions.json` (local archive)
+- `screen_time.log` (window activity samples)
+- `secret_unlock_qr.png` (generated QR)
+
+They should not be committed.
+
+## Troubleshooting
+
+### Smart App Control blocks downloads
+
+Use the manual Python run method above instead of unsigned installer binaries.
+
+### Dashboard login works but no data
+
+- Check Firebase Auth account used in app and website is the same.
+- Check Firestore rules allow authenticated reads/writes.
+
+### Release/Actions failures
+
+Release automation has been removed to avoid noisy failed deployments. Use manual run or manual packaging.
+
