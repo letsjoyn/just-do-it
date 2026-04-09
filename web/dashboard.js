@@ -23,24 +23,28 @@ let filteredDate = null; // for heatmap filtering
 document.addEventListener("DOMContentLoaded", () => {
     const loginContainer = document.getElementById('login-container');
     const dashContainer = document.getElementById('dashboard-container');
+    const siteFooter = document.getElementById('site-footer');
     const loginForm = document.getElementById('login-form');
     const loginError = document.getElementById('login-error');
     const logoutBtn = document.getElementById('logout-btn');
     const clearFilterBtn = document.getElementById('clear-filter');
 
     onAuthStateChanged(auth, (user) => {
-            const shiaMeme = document.getElementById('shia-meme');
-            if (user) {
-                currentUser = user;
-                loginContainer.style.display = 'none';
-                if (shiaMeme) shiaMeme.style.display = 'none';
-                dashContainer.style.display = 'flex';
-                logoutBtn.style.display = 'block';
-                loadData(currentUser.uid);
-            } else {
-                currentUser = null;
-                loginContainer.style.display = 'block';
-                if (shiaMeme) shiaMeme.style.display = 'block';
+        const shiaMeme = document.getElementById('shia-meme');
+        if (user) {
+            currentUser = user;
+            loginContainer.style.display = 'none';
+            dashContainer.style.display = 'flex';
+            logoutBtn.style.display = 'block';
+            if (shiaMeme) shiaMeme.style.display = 'none';
+            if (siteFooter) siteFooter.style.display = 'none';
+            loadData(currentUser.uid);
+        } else {
+            currentUser = null;
+            loginContainer.style.display = 'block';
+            dashContainer.style.display = 'none';
+            if (shiaMeme) shiaMeme.style.display = 'block';
+            if (siteFooter) siteFooter.style.display = 'flex';
         }
     });
 
@@ -148,7 +152,10 @@ function renderDashboard() {
     } else {
         sessionsToRender.forEach(session => {
             const d = new Date(session.date);
-            const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const isValidDate = !Number.isNaN(d.getTime());
+            const dateStr = isValidDate
+                ? d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                : 'Unknown date';
             
             const secs = session.duration_seconds || (session.minutes ? session.minutes * 60 : 0);
             const durStr = formatDuration(secs);
