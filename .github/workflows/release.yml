@@ -1,0 +1,48 @@
+name: Build Desktop Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install PyInstaller
+        run: py -m pip install --upgrade pip pyinstaller
+
+      - name: Build executable
+        run: |
+          py -m PyInstaller --noconfirm --onefile --windowed --name JustDoIt `
+            --add-data "web;web" `
+            --add-data "engine.exe;." `
+            just_do_it.py
+
+      - name: Zip release asset
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item dist\JustDoIt.exe release\JustDoIt.exe
+          Compress-Archive -Path release\* -DestinationPath JustDoIt-${{ github.ref_name }}.zip -Force
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            JustDoIt-${{ github.ref_name }}.zip
+            dist/JustDoIt.exe
+          generate_release_notes: true

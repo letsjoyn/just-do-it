@@ -15,9 +15,10 @@
 7. [Technology Stack](#technology-stack)
 8. [User Interface](#user-interface)
 9. [Setup and Running](#setup-and-running)
-10. [Why This Is Better](#why-this-is-better)
-11. [Deployment Notes](#deployment-notes)
-12. [Future Scope](#future-scope)
+10. [Hosting and Downloads](#hosting-and-downloads)
+11. [Why This Is Better](#why-this-is-better)
+12. [Deployment Notes](#deployment-notes)
+13. [Future Scope](#future-scope)
 
 ## Purpose & Problem Statement
 
@@ -58,7 +59,6 @@ FocusModeCLI/
 ├── focus_data.db
 ├── screen_time.log
 ├── secret_unlock_qr.png
-├── output-onlinepngtools.png
 └── web/
     ├── index.html
     ├── dashboard.js
@@ -77,7 +77,7 @@ FocusModeCLI/
 - `focus_data.db` - local database artifact kept in the project folder.
 - `screen_time.log` - window activity trace collected by the blocker engine.
 - `secret_unlock_qr.png` - generated QR image used for early unlock verification.
-- `output-onlinepngtools.png` - bottom-left logo image used on the login page.
+- `web/output-onlinepngtools.png` - bottom-left logo image used on the login page.
 
 ## How It Works
 
@@ -289,6 +289,37 @@ To host the dashboard online:
 2. Run `firebase init hosting`.
 3. Set the public directory to `web`.
 4. Deploy with `firebase deploy --only hosting`.
+
+## Hosting and Downloads
+
+### Web Dashboard Hosting
+
+The repository now includes a GitHub Pages workflow that publishes the `web/` folder automatically from the `main` branch.
+
+To finish hosting on GitHub Pages:
+
+1. Open the repository settings on GitHub.
+2. Enable GitHub Pages with the Actions workflow as the source.
+3. Add the final domain to Firebase Authentication authorized domains if you use Firebase login from that host.
+
+If you prefer Firebase Hosting, the same `web/` folder also works there.
+
+### Desktop App Downloads
+
+The repository now includes a release workflow for versioned downloads.
+
+- Push a tag such as `v1.0.0` to trigger a release build.
+- The workflow packages the desktop app into `JustDoIt.exe`.
+- A zip file is uploaded as the GitHub Release asset.
+
+### What Users Download
+
+Users only need two things:
+
+- the hosted website for the dashboard,
+- the release asset from GitHub Releases for the desktop app.
+
+That keeps the experience simple: one site, one app download.
 
 ## Why This Is Better
 
