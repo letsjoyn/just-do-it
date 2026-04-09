@@ -55,6 +55,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return os.path.join(self.root_dir, "sync_payload.json")
         if path == "/local_sessions.json" or path.startswith("/local_sessions.json?"):
             return os.path.join(self.root_dir, "local_sessions.json")
+        if path == "/auth.json" or path.startswith("/auth.json?"):
+            return os.path.join(self.root_dir, "auth.json")
         return super().translate_path(path)
 
     def log_message(self, fmt, *args):
@@ -65,6 +67,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             super().handle()
         except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
             pass  # Browser closed connection early — harmless
+
+    def send_response(self, code, message=None):
+        super().send_response(code, message)
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
 
 def start_dashboard_server():
     root_dir = os.path.dirname(os.path.abspath(__file__))
@@ -201,10 +209,10 @@ class FocusClient:
             except: pass
         self.build_login()
 
-    def log_session(self, mins):
-        self.sync_to_cloud(mins)
+    def log_session(self, duration_seconds: int, early_terminated: bool):
+        self.sync_to_cloud(duration_seconds, early_terminated)
 
-    def sync_to_cloud(self, mins):
+    def sync_to_cloud(self, duration_seconds: int, early_terminated: bool):
         st_data = {}
         if os.path.exists("screen_time.log"):
             try:
@@ -227,7 +235,8 @@ class FocusClient:
 
         current_session = {
             "date": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "minutes": mins,
+            "duration_seconds": duration_seconds,
+            "early_terminated": early_terminated,
             "unlock_method": self.unlock_method,
             "blocked_items": self.blocked,
             "screen_time": st_data
@@ -259,7 +268,8 @@ class FocusClient:
                 payload = {
                     "fields": {
                         "date": {"stringValue": session["date"]},
-                        "minutes": {"integerValue": str(session["minutes"])},
+                        "duration_seconds": {"integerValue": str(session["duration_seconds"])},
+                        "early_terminated": {"booleanValue": session["early_terminated"]},
                         "unlock_method": {"stringValue": session["unlock_method"]},
                         "blocked_items": {"arrayValue": {"values": [{"stringValue": b} for b in session["blocked_items"]]}},
                     }
@@ -589,7 +599,7 @@ class FocusClient:
     def finish(self):
         self.is_running = False
         self.reset_ui()
-        self.log_session(self.initial_mins)
+        self.log_session(self.initial_mins * 60, False)
         send_ipc("UNLOCK")
         self.open_dashboard()
         messagebox.showinfo("Done", f"Session complete! {self.initial_mins} min logged.\nDashboard opened in browser.")
@@ -621,8 +631,8 @@ class FocusClient:
         def check():
             if ent.get().strip() == answer:
                 win.destroy()
-                mins_done = self.initial_mins - (self.seconds_left // 60)
-                if mins_done > 0: self.log_session(mins_done)
+                duration = (self.initial_mins * 60) - self.seconds_left
+                if duration > 0: self.log_session(duration, True)
                 self.is_running = False
                 self.reset_ui()
                 send_ipc("UNLOCK")
@@ -651,8 +661,8 @@ class FocusClient:
             if data == "UNLOCK_FOCUS":
                 cap.release(); cv2.destroyAllWindows()
                 self.root.deiconify()
-                mins_done = self.initial_mins - (self.seconds_left // 60)
-                if mins_done > 0: self.log_session(mins_done)
+                duration = (self.initial_mins * 60) - self.seconds_left
+                if duration > 0: self.log_session(duration, True)
                 self.is_running = False
                 self.reset_ui()
                 send_ipc("UNLOCK")

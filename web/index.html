@@ -1,383 +1,212 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Just Do It — Focus Analytics</title>
-  <meta name="description"
-    content="Industry-grade focus analytics dashboard. Track sessions, streaks, productivity and screen time." />
-  <meta name="theme-color" content="#0B0B0F" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
-    rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
-  <script type="module" src="firebase-config.js?v=2"></script>
-  <script type="module" src="auth.js?v=2"></script>
+    <meta charset="UTF-8">
+    <title>Focus Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        /* Minimalist reset */
+        * { box-sizing: border-box; }
+        body { 
+            margin: 0; padding: 0; 
+            background: #fff; 
+            color: #424242; 
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            display: flex; flex-direction: column; min-height: 100vh; 
+        }
+        .container { 
+            flex: 1; margin: 0 auto; padding: 2rem; 
+            width: 100%; max-width: 900px; 
+            display: flex; flex-direction: column; gap: 2rem; 
+        }
+        h1, h2, h3 { 
+            margin: 0; font-weight: 500; 
+            color: #333; 
+        }
+        h1 { 
+            font-size: 1.5rem; 
+            border-bottom: 1px solid #e0e0e0; 
+            padding-bottom: 1rem; width: 100%; 
+        }
+        
+        button { 
+            background: #387ed1; color: #fff; 
+            border: none; padding: 0.6rem 1.2rem; 
+            border-radius: 3px;
+            font-size: 0.9rem;
+            font-weight: 500; cursor: pointer; transition: background 0.2s; 
+        }
+        button:hover { background: #2c68b0; }
+        
+        input { 
+            border: 1px solid #e0e0e0; 
+            padding: 0.75rem; width: 100%; margin-bottom: 1rem; 
+            font-size: 1rem; border-radius: 3px; 
+            color: #424242;
+            font-family: inherit;
+        }
+        input:focus { outline: none; border-color: #387ed1; }
+
+        /* Login */
+        #login-container { 
+            max-width: 400px; margin: 8rem auto; 
+            padding: 3rem 2rem; width: 100%; text-align: center;
+        }
+        #login-container h1 { margin-bottom: 0.25rem; border-bottom: 0; padding-bottom: 0; font-size: 2rem; font-weight: 500; color: #424242; }
+        .login-subtitle { color: #888; font-size: 1rem; margin-bottom: 2.5rem; margin-top: 0; }
+        .input-group { text-align: left; margin-bottom: 1.5rem; }
+        .input-group label { display: block; font-size: 0.85rem; color: #666; margin-bottom: 0.5rem; }
+        #login-container input { padding: 0.85rem; border: 1px solid #e0e0e0; margin-bottom: 0; }
+        #login-error { color: #d32f2f; background: #ffebee; padding: 0.75rem; font-size: 0.85rem; margin-bottom: 1.5rem; display: none; text-align: center; border-radius: 3px; }
+        #status-msg { margin-bottom: 1rem; padding: 0.75rem; border: 1px solid #e0e0e0; background: #f9f9f9; text-align: center; font-size: 0.85rem; display: none; border-radius: 3px;}
+        #error-msg { display: none; color: #d32f2f; background: #ffebee; border: 1px solid #ef9a9a; padding: 1rem; border-radius: 3px; margin-bottom: 1rem;}
+
+        /* Stats & Cards */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .stat-card { 
+            border: 1px solid #e0e0e0; 
+            padding: 1rem 1.5rem; display: flex; flex-direction: column; 
+            align-items: flex-start; justify-content: center; 
+            border-radius: 4px;
+            background: #fff;
+            transition: background 0.2s;
+        }
+        .stat-card:hover { background: #f9f9f9; }
+        .stat-title { font-size: 0.75rem; color: #888; margin-bottom: 0.25rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 1.8rem; font-weight: 500; color: #333; }
+        
+        /* Table */
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; }
+        th, td { padding: 1rem; border-bottom: 1px solid #e0e0e0; }
+        th { font-weight: 500; color: #777; font-size: 0.85rem; text-transform: uppercase; background: #fafafa; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #fafafa; }
+        tr { transition: background 0.1s; }
+        
+        .badge { font-size: 0.75rem; padding: 0.2rem 0.6rem; font-weight: 500; border-radius: 3px; }
+        .yes { background: #f0f0f0; color: #424242; border: 1px solid #e0e0e0; }
+        .no { background: transparent; color: #999; border: 1px solid #eee; }
+        
+        /* Heatmap */
+        .heatmap-wrapper { border: 1px solid #e0e0e0; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; overflow-x: auto; border-radius: 4px; }
+        .heatmap-grid { display: grid; grid-template-rows: repeat(7, 1fr); gap: 3px; grid-auto-flow: column; grid-auto-columns: 14px; padding-bottom: 0.5rem; }
+        .heatmap-cell { width: 14px; height: 14px; border-radius: 2px; background: #eee; cursor: pointer; transition: 0.1s all; border: 1px solid transparent; }
+        .heatmap-cell:hover { border-color: #999; }
+        .heatmap-cell.selected { border: 1px solid #333; transform: scale(1.1); box-shadow: 0 0 2px rgba(0,0,0,0.2); }
+        .heatmap-legend { display: flex; flex-direction: row; align-items: center; gap: 4px; font-size: 0.75rem; color: #777; }
+        
+        /* Modifiers - Zerodha Blue Palette */
+        .color-0 { background: #f0f0f0; }
+        .color-1 { background: #dce7f5; }
+        .color-2 { background: #b8d0ed; }
+        .color-3 { background: #6da2e0; }
+        .color-4 { background: #387ed1; }
+        .color-5 { background: #2665b0; } 
+        
+        /* Extras */
+        .header-actions { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; padding-bottom: 1rem; }
+        .header-actions h1 { border-bottom: 0; padding-bottom: 0; width: auto; color: #333; }
+        #filter-info { display: flex; justify-content: space-between; align-items: center; background: #f5f8fc; color: #387ed1; padding: 0.75rem 1rem; border: 1px solid #dce7f5; font-size: 0.9rem; margin-bottom: -1rem; display: none; border-radius: 3px; }
+        #clear-filter { font-size: 1rem; cursor: pointer; color: #387ed1; padding: 0 0.5rem; font-weight: 600; }
+        #clear-filter:hover { color: #2665b0; }
+    </style>
 </head>
-
 <body>
-
-  <!-- ── BOOT LOADER ── -->
-  <div id="boot-loader"
-    style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--bg); z-index: 10000; color: var(--blue); font-weight: 800; letter-spacing: 2px;">
-    ◆ JDI
-  </div>
-
-  <!-- ── AUTHENTICATION OVERLAY ── -->
-  <div id="auth-overlay" class="auth-overlay" style="display: none;">
-    <div class="auth-card">
-      <h2>◆ JDI</h2>
-      <p>Sign in to Focus Analytics</p>
-      <input type="email" id="auth-email" placeholder="Email Address">
-      <input type="password" id="auth-pass" placeholder="Password">
-      <div class="auth-btns">
-        <button id="btn-login" class="btn-primary">Log In</button>
-        <button id="btn-signup" class="btn-secondary">Sign Up</button>
-      </div>
-      <p id="auth-error" class="auth-error"></p>
+    <div style="position: absolute; top: 2rem; left: 2rem; font-size: 1.2rem; font-weight: 600; color: #424242; letter-spacing: -0.5px;">Just Do it</div>
+    
+    <div id="login-container">
+        <h1 style="font-size: 1.4rem; margin-bottom: 0.5rem; font-weight: 500;">Login</h1>
+        <p class="login-subtitle" style="margin-bottom: 2rem;">Track your focus dashboard</p>
+        <div id="login-error"></div>
+        <form id="login-form">
+            <div class="input-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" required placeholder="">
+            </div>
+            <div class="input-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required placeholder="">
+            </div>
+            <button type="submit" style="width: 100%; padding: 0.85rem; font-size: 1rem; margin-top: 1rem; font-weight: 500;">Login</button>
+        </form>
     </div>
-  </div>
 
-  <!-- ── MAIN APP (Hidden until auth) ── -->
-  <div id="app-container" class="dashboard-wrapper" style="display: none;">
-
-    <!-- ═══ SIDEBAR ═══ -->
-    <nav id="sidebar">
-      <div class="sb-logo">
-        <span class="sb-diamond">◆</span>
-        <span class="sb-brand">JDI</span>
-      </div>
-      <div class="sb-nav">
-        <a class="sb-link active" data-section="overview" href="#" id="nav-overview">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="7" height="7" rx="1" />
-            <rect x="14" y="3" width="7" height="7" rx="1" />
-            <rect x="3" y="14" width="7" height="7" rx="1" />
-            <rect x="14" y="14" width="7" height="7" rx="1" />
-          </svg>
-          <span>Overview</span>
-        </a>
-        <a class="sb-link" data-section="planner" href="#" id="nav-planner">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="18" rx="2" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
-          <span>Planner</span>
-        </a>
-        <a class="sb-link" data-section="sessions" href="#" id="nav-sessions">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="12 6 12 12 16 14" />
-          </svg>
-          <span>Sessions</span>
-        </a>
-        <a class="sb-link" data-section="screentime" href="#" id="nav-screentime">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="3" width="20" height="14" rx="2" />
-            <line x1="8" y1="21" x2="16" y2="21" />
-            <line x1="12" y1="17" x2="12" y2="21" />
-          </svg>
-          <span>Screen Time</span>
-        </a>
-      </div>
-      <div class="sb-footer">
-        <button id="btn-export" class="sb-link" title="Export JSON">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          <span>Export</span>
-        </button>
-        <button id="btn-logout-sidebar" class="sb-link" title="Log Out" style="color:var(--red); margin-top:5px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-          <span>Log Out</span>
-        </button>
-      </div>
-    </nav>
-
-    <!-- ═══ MAIN ═══ -->
-    <div id="app">
-
-      <!-- Header -->
-      <header id="header">
-        <div class="hdr-left">
-          <h1 id="page-title">Overview</h1>
-          <span class="hdr-date" id="hdr-date"></span>
+    <div style="position: absolute; bottom: 2rem; width: 100%; text-align: center; font-size: 0.8rem; color: #888; display: flex; flex-direction: column; gap: 0.6rem;">
+        <div>Open source on <a href="https://github.com/letsjoyn/just-do-it" style="color: #387ed1; text-decoration: none;" target="_blank">GitHub</a></div>
+        <div style="display: flex; justify-content: center; gap: 0.8rem;">
+            <a href="#" style="color: #387ed1; text-decoration: none;">Privacy Policy</a>
+            <span style="color: #e0e0e0;">|</span>
+            <a href="#" style="color: #387ed1; text-decoration: none;">Terms</a>
         </div>
-        <div class="hdr-right">
-          <span class="hdr-live" id="hdr-live">
-            <span class="live-dot"></span> Live
-          </span>
-          <button id="btn-refresh" class="hdr-btn" title="Refresh data">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="23 4 23 10 17 10" />
-              <polyline points="1 20 1 14 7 14" />
-              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-            </svg>
-          </button>
+    </div>
+
+    <div id="dashboard-container" class="container" style="display: none;">
+        <div class="header-actions">
+            <h1>Just Do it <span style="color: #888; font-weight: 400; font-size: 1.2rem;">/ Dashboard</span></h1>
+            <button id="logout-btn">Log Out</button>
         </div>
-      </header>
+        
+        <div id="status-msg"></div>
+        <div id="error-msg"></div>
 
-      <!-- ═══ OVERVIEW SECTION ═══ -->
-      <section id="sec-overview" class="section active">
-
-        <!-- KPI Row -->
-        <div id="kpi-row">
-          <div class="kpi" id="kpi-total">
-            <div class="kpi-top">
-              <span class="kpi-label">Total Focus</span>
-              <span class="kpi-trend" id="trend-total"></span>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-title">Sessions</div>
+                <div class="stat-value" id="total-sessions">0</div>
             </div>
-            <div class="kpi-val-row">
-              <span class="kpi-val" id="val-total">0<small>min</small></span>
+            <div class="stat-card">
+                <div class="stat-title">Focus Time</div>
+                <div class="stat-value" id="total-duration">0s</div>
             </div>
-            <canvas class="kpi-spark" id="spark-total" width="120" height="32"></canvas>
-          </div>
-          <div class="kpi" id="kpi-sessions">
-            <div class="kpi-top">
-              <span class="kpi-label">Sessions</span>
-              <span class="kpi-trend" id="trend-sessions"></span>
-            </div>
-            <div class="kpi-val-row">
-              <span class="kpi-val" id="val-sessions">0</span>
-            </div>
-            <canvas class="kpi-spark" id="spark-sessions" width="120" height="32"></canvas>
-          </div>
-          <div class="kpi" id="kpi-streak">
-            <div class="kpi-top">
-              <span class="kpi-label">Day Streak</span>
-            </div>
-            <div class="kpi-val-row">
-              <span class="kpi-val" id="val-streak">0<small>days</small></span>
-            </div>
-            <div class="streak-bar" id="streak-dots"></div>
-          </div>
-          <div class="kpi" id="kpi-avg">
-            <div class="kpi-top">
-              <span class="kpi-label">Avg / Session</span>
-              <span class="kpi-trend" id="trend-avg"></span>
-            </div>
-            <div class="kpi-val-row">
-              <span class="kpi-val" id="val-avg">0<small>min</small></span>
-            </div>
-            <canvas class="kpi-spark" id="spark-avg" width="120" height="32"></canvas>
-          </div>
-          <div class="kpi" id="kpi-score">
-            <div class="kpi-top">
-              <span class="kpi-label">Focus Score</span>
-            </div>
-            <div class="kpi-val-row">
-              <span class="kpi-val kpi-score-val" id="val-score">0</span>
-            </div>
-            <div class="score-ring-wrap">
-              <svg viewBox="0 0 48 48" class="score-ring">
-                <circle cx="24" cy="24" r="20" class="sr-bg" />
-                <circle cx="24" cy="24" r="20" class="sr-fg" id="score-ring-fg" />
-              </svg>
-            </div>
-          </div>
         </div>
 
-        <!-- Charts Row -->
-        <div class="grid-2">
-          <!-- Focus Timeline -->
-          <div class="panel" id="panel-timeline">
-            <div class="panel-hdr">
-              <h2>Focus Timeline</h2>
-              <div class="range-tabs">
-                <button class="rt active" data-range="7">7D</button>
-                <button class="rt" data-range="14">14D</button>
-                <button class="rt" data-range="30">30D</button>
-              </div>
+        <div class="heatmap-wrapper" id="heatmap-wrapper" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.5rem;">
+                <h3 style="font-size: 0.9rem; color: #555; font-weight: 500;">Activity Heatmap</h3>
+                <div class="heatmap-legend">
+                    Less <div class="heatmap-cell color-1"></div><div class="heatmap-cell color-2"></div><div class="heatmap-cell color-3"></div><div class="heatmap-cell color-4"></div><div class="heatmap-cell color-5"></div> More
+                </div>
             </div>
-            <div class="panel-body">
-              <canvas id="chart-timeline" height="200"></canvas>
+            <div class="heatmap-container" style="display: flex; flex-direction: column;">
+                <div class="months-label" id="months-label" style="display: flex; position: relative; height: 1.2rem; margin-left: 24px; font-size: 0.75rem; color: #777;"></div>
+                <div class="days-and-grid" style="display: flex; flex-direction: row; gap: 0.5rem; align-items: stretch;">
+                    <div class="days-label" style="display: grid; grid-template-rows: repeat(7, 1fr); gap: 3px; font-size: 0.7rem; color: #777; padding-bottom: 0.5rem; align-items: center; justify-items: end;">
+                        <span style="grid-row: 2;">Mon</span>
+                        <span style="grid-row: 4;">Wed</span>
+                        <span style="grid-row: 6;">Fri</span>
+                    </div>
+                    <div class="heatmap-grid" id="heatmap"></div>
+                </div>
             </div>
-          </div>
-
-          <!-- Heatmap -->
-          <div class="panel" id="panel-heatmap">
-            <div class="panel-hdr">
-              <h2>Contribution Heatmap</h2>
-              <span class="panel-sub" id="heatmap-range"></span>
-            </div>
-            <div class="panel-body">
-              <div id="heatmap-months"></div>
-              <div id="heatmap-grid"></div>
-              <div id="heatmap-legend">
-                <span>Less</span>
-                <span class="hl hl-0"></span>
-                <span class="hl hl-1"></span>
-                <span class="hl hl-2"></span>
-                <span class="hl hl-3"></span>
-                <span class="hl hl-4"></span>
-                <span>More</span>
-              </div>
-            </div>
-          </div>
         </div>
 
-        <!-- Row 3: Breakdown + Top Distraction -->
-        <div class="grid-2">
-          <div class="panel" id="panel-methods">
-            <div class="panel-hdr">
-              <h2>Unlock Methods</h2>
-            </div>
-            <div class="panel-body panel-donut-body">
-              <canvas id="chart-donut" width="160" height="160"></canvas>
-              <div id="donut-legend"></div>
-            </div>
-          </div>
-          <div class="panel" id="panel-topapps">
-            <div class="panel-hdr">
-              <h2>Top Screen Time</h2>
-              <span class="panel-sub">Latest session</span>
-            </div>
-            <div class="panel-body">
-              <div id="topapps-list"></div>
-              <p id="topapps-empty" class="empty hidden">No screen time data</p>
-            </div>
-          </div>
+        <div id="filter-info">
+            <span id="filter-text" style="font-weight: 500;"></span>
+            <span id="clear-filter" title="Clear Filter">&#10005;</span>
         </div>
 
-        <!-- Recent Sessions (compact) -->
-        <div class="panel" id="panel-recent">
-          <div class="panel-hdr">
-            <h2>Recent Sessions</h2>
-            <a href="#" class="panel-link" id="link-all-sessions">View all →</a>
-          </div>
-          <div class="panel-body no-pad">
-            <table id="recent-table" class="data-table">
-              <thead>
-                <tr>
-                  <th>Date & Time</th>
-                  <th>Duration</th>
-                  <th>Method</th>
-                  <th>Blocked</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="recent-body"></tbody>
-            </table>
-            <p id="recent-empty" class="empty hidden">No sessions yet — start one in the app!</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- ═══ PLANNER SECTION ═══ -->
-      <section id="sec-planner" class="section">
-        <div class="panel full">
-          <div class="panel-hdr">
-            <h2>Daily Planner</h2>
-          </div>
-          <div class="panel-body">
-            <div class="planner-controls"
-              style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--grid); padding-bottom:15px; margin-bottom:15px;">
-              <div><input type="date" id="planner-date" /></div>
-              <button id="btn-add-block"
-                style="padding: 8px 15px; background:var(--blue); color:#fff; font-weight:600; cursor:pointer;">+ Add
-                Focus Block</button>
-            </div>
-            <div id="planner-content"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ═══ SESSIONS SECTION ═══ -->
-      <section id="sec-sessions" class="section">
-        <div class="panel full">
-          <div class="panel-hdr">
-            <h2>All Sessions</h2>
-            <div class="search-wrap">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input type="text" id="session-search" placeholder="Search by date, method..." />
-            </div>
-          </div>
-          <div class="panel-body no-pad">
-            <table id="all-table" class="data-table">
-              <thead>
-                <tr>
-                  <th class="sortable" data-sort="date">Date & Time <span class="sort-ico">↕</span></th>
-                  <th class="sortable" data-sort="mins">Duration <span class="sort-ico">↕</span></th>
-                  <th>Method</th>
-                  <th>Blocked Items</th>
-                  <th>Screen Time</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="all-body"></tbody>
-            </table>
-            <p id="all-empty" class="empty hidden">No sessions recorded</p>
-          </div>
-          <div class="panel-footer">
-            <span id="all-count"></span>
-            <div id="pagination"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ═══ SCREEN TIME SECTION ═══ -->
-      <section id="sec-screentime" class="section">
-        <div class="panel full">
-          <div class="panel-hdr">
-            <h2>Screen Time Analysis</h2>
-            <span class="panel-sub">Aggregated across all sessions</span>
-          </div>
-          <div class="panel-body">
-            <div id="st-chart-wrap">
-              <canvas id="chart-screentime" height="300"></canvas>
-            </div>
-            <p id="st-empty" class="empty hidden">No screen time data available</p>
-          </div>
-        </div>
-        <div class="grid-2">
-          <div class="panel">
-            <div class="panel-hdr">
-              <h2>Most Used Apps</h2>
-            </div>
-            <div class="panel-body no-pad">
-              <table class="data-table" id="st-table">
+        <div style="border: 1px solid #e0e0e0; border-radius: 4px; overflow-x: auto;">
+            <table>
                 <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Application</th>
-                    <th>Time</th>
-                    <th>% of Total</th>
-                  </tr>
+                    <tr>
+                        <th>Date</th>
+                        <th>Duration</th>
+                        <th>Unlock Method</th>
+                        <th>Early Term</th>
+                    </tr>
                 </thead>
-                <tbody id="st-body"></tbody>
-              </table>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-hdr">
-              <h2>Usage Distribution</h2>
-            </div>
-            <div class="panel-body panel-donut-body">
-              <canvas id="chart-st-donut" width="180" height="180"></canvas>
-              <div id="st-donut-legend"></div>
-            </div>
-          </div>
+                <tbody id="session-table-body">
+                    <tr><td colspan="4" style="text-align:center; color:#999; font-style: italic;">Loading data...</td></tr>
+                </tbody>
+            </table>
         </div>
-      </section>
-
     </div>
-  </div>
 
-  <script src="dashboard.js?v=2"></script>
+    <!-- Shia Meme -->
+    <img src="output-onlinepngtools.png" id="shia-meme" alt="Just Do It" style="position: fixed; left: -30px; bottom: -80px; height: 450px; z-index: 5; pointer-events: none; transition: transform 0.3s ease;">
+
+    <script type="module" src="dashboard.js"></script>
 </body>
-
 </html>
