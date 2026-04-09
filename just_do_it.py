@@ -35,9 +35,15 @@ FONTB    = ("Segoe UI", 10, "bold")
 SYNC_FILE = "sync_payload.json"
 LOCAL_ARCHIVE_FILE = "local_sessions.json"
 SESSION_STATE_FILE = "active_session.json"
+BLOCKED_ITEMS_FILE = "blocked_items.json"
 DASHBOARD_PORT = 8765
 DASHBOARD_URL  = "https://just-do-it-1fa38.web.app"
 QR_SENDER_EMAIL = "joynnayvedya@gmail.com"
+
+DEFAULT_BLOCKED_ITEMS = [
+    "youtube.com", "facebook.com", "instagram.com", "reddit.com", "twitter.com",
+    "steam.exe", "discord.exe", "chrome.exe", "msedge.exe"
+]
 
 # ── Firebase Config ──
 FIREBASE_API_KEY = "AIzaSyB6BZ3TixkZunTAchX3EkWlEW-F-QRDXZY"
@@ -98,8 +104,7 @@ class FocusClient:
             messagebox.showerror("Error", "Run as Administrator.")
             sys.exit()
 
-        self.blocked = ["youtube.com","facebook.com","instagram.com","reddit.com","twitter.com",
-                        "steam.exe","discord.exe","chrome.exe","msedge.exe"]
+        self.blocked = self.load_blocked_items()
         self.total_seconds = 1
         self.seconds_left = 0
         self.session_target_seconds = 0
@@ -170,6 +175,31 @@ class FocusClient:
             with open("auth.json", "w") as f:
                 json.dump({"token": self.auth_token, "uid": self.user_uid, "email": self.user_email}, f)
         except: pass
+
+    def load_blocked_items(self):
+        if not os.path.exists(BLOCKED_ITEMS_FILE):
+            return list(DEFAULT_BLOCKED_ITEMS)
+        try:
+            with open(BLOCKED_ITEMS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, list):
+                return list(DEFAULT_BLOCKED_ITEMS)
+            normalized = []
+            for item in data:
+                if isinstance(item, str):
+                    val = item.strip().lower()
+                    if val and val not in normalized:
+                        normalized.append(val)
+            return normalized if normalized else list(DEFAULT_BLOCKED_ITEMS)
+        except Exception:
+            return list(DEFAULT_BLOCKED_ITEMS)
+
+    def save_blocked_items(self):
+        try:
+            with open(BLOCKED_ITEMS_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.blocked, f, indent=2)
+        except Exception:
+            pass
 
     def load_local_auth(self):
         if os.path.exists("auth.json"):
@@ -523,24 +553,41 @@ class FocusClient:
         add_frame.pack(fill=tk.X, padx=12, pady=(0,10))
         self.add_entry = tk.Entry(add_frame, font=FONT, bg=BG, fg=TXT, bd=0, insertbackground=TXT)
         self.add_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=4)
-        tk.Button(add_frame, text="+ ADD", font=("Segoe UI",9,"bold"), bg=GREEN, fg="#FFF",
-                  bd=0, padx=10, command=self.add_item, cursor="hand2").pack(side=tk.LEFT, padx=(5,0))
-        tk.Button(add_frame, text="− DEL", font=("Segoe UI",9,"bold"), bg=RED, fg="#FFF",
-                  bd=0, padx=10, command=self.del_item, cursor="hand2").pack(side=tk.LEFT, padx=(5,0))
+        self.add_btn = tk.Button(add_frame, text="+ ADD", font=("Segoe UI",9,"bold"), bg=GREEN, fg="#FFF",
+                                 bd=0, padx=10, command=self.add_item, cursor="hand2")
+        self.add_btn.pack(side=tk.LEFT, padx=(5,0))
+        self.del_btn = tk.Button(add_frame, text="− DEL", font=("Segoe UI",9,"bold"), bg=RED, fg="#FFF",
+                                 bd=0, padx=10, command=self.del_item, cursor="hand2")
+        self.del_btn.pack(side=tk.LEFT, padx=(5,0))
 
     def add_item(self):
+        if self.is_running:
+            return
         val = self.add_entry.get().strip().lower()
         if val and val not in self.blocked:
             self.blocked.append(val)
             self.listbox.insert(tk.END, f"  ✕  {val}")
+            self.save_blocked_items()
         self.add_entry.delete(0, tk.END)
 
     def del_item(self):
+        if self.is_running:
+            return
         sel = self.listbox.curselection()
         if sel:
             idx = sel[0]
             self.blocked.pop(idx)
             self.listbox.delete(idx)
+            self.save_blocked_items()
+
+    def set_blocked_list_editable(self, editable: bool):
+        entry_state = tk.NORMAL if editable else tk.DISABLED
+        btn_state = tk.NORMAL if editable else tk.DISABLED
+        list_state = tk.NORMAL if editable else tk.DISABLED
+        self.add_entry.config(state=entry_state)
+        self.add_btn.config(state=btn_state)
+        self.del_btn.config(state=btn_state)
+        self.listbox.config(state=list_state)
 
     # ── Pre-start flow ──
     def pre_start(self):
@@ -699,6 +746,7 @@ class FocusClient:
         self.stop_btn.config(state=tk.NORMAL)
         self.dashboard_btn.config(state=tk.DISABLED)
         self.logout_btn.config(state=tk.DISABLED)
+        self.set_blocked_list_editable(False)
 
         err = send_ipc(f"START {mins}")
         if "No such file" in err:
@@ -855,6 +903,7 @@ class FocusClient:
         self.stop_btn.config(state=tk.DISABLED)
         self.dashboard_btn.config(state=tk.NORMAL)
         self.logout_btn.config(state=tk.NORMAL)
+        self.set_blocked_list_editable(True)
 
     def play_motivation(self):
         """Play the Shia LaBeouf motivation audio"""
