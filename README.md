@@ -33,9 +33,32 @@ firebase.json               # firebase hosting config
 .firebaserc                # firebase project mapping
 ```
 
-## How users should run it (manual method)
+## End-user usage (what normal users do)
 
-Use this method instead of downloading an unsigned installer. This avoids most Smart App Control issues.
+Users only need to run the app and sign up/login. They do not deploy Firebase.
+
+### 1. Open the app
+
+Run:
+
+```powershell
+py just_do_it.py
+```
+
+### 2. Sign up or login
+
+Use your email and password in the app.
+
+### 3. Start using focus mode
+
+1. Set duration.
+2. Choose unlock method (Hard Math or QR).
+3. Click Start.
+4. Open Dashboard when needed.
+
+## Manual setup (for advanced users / local run)
+
+Use this method if someone is running the project from source.
 
 ### 1. Install prerequisites
 
@@ -97,7 +120,7 @@ py just_do_it.py
 https://just-do-it-1fa38.web.app
 ```
 
-### Deploy updates to Firebase Hosting
+### Deploy updates to Firebase Hosting (maintainer only)
 
 ```powershell
 firebase login
