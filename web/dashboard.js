@@ -29,22 +29,30 @@ document.addEventListener("DOMContentLoaded", () => {
     const logoutBtn = document.getElementById('logout-btn');
     const clearFilterBtn = document.getElementById('clear-filter');
 
-    onAuthStateChanged(auth, (user) => {
+    function setViewState(isAuthenticated) {
         const shiaMeme = document.getElementById('shia-meme');
-        if (user) {
-            currentUser = user;
+        if (isAuthenticated) {
             loginContainer.style.display = 'none';
             dashContainer.style.display = 'flex';
             logoutBtn.style.display = 'block';
             if (shiaMeme) shiaMeme.style.display = 'none';
             if (siteFooter) siteFooter.style.display = 'none';
-            loadData(currentUser.uid);
         } else {
-            currentUser = null;
             loginContainer.style.display = 'block';
             dashContainer.style.display = 'none';
             if (shiaMeme) shiaMeme.style.display = 'block';
             if (siteFooter) siteFooter.style.display = 'flex';
+        }
+    }
+
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            currentUser = user;
+            setViewState(true);
+            loadData(currentUser.uid);
+        } else {
+            currentUser = null;
+            setViewState(false);
         }
     });
 
@@ -64,9 +72,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     logoutBtn.addEventListener('click', async () => {
-        await signOut(auth);
+        // Immediately switch to login UI so old dashboard content never overlaps.
+        setViewState(false);
         allSessions = [];
-        renderDashboard();
+        filteredDate = null;
+        try {
+            await signOut(auth);
+        } catch (err) {
+            console.error('Sign out failed:', err);
+        }
     });
 
     clearFilterBtn.addEventListener('click', () => {
