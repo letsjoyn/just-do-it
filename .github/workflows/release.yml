@@ -46,12 +46,9 @@ jobs:
           body: |
             ## Download the app
 
-            Primary download: `JustDoIt.exe`
-
-            Secondary download: `JustDoIt-v${{ github.ref_name }}.zip`
+            Primary download: `JustDoIt-v${{ github.ref_name }}.zip`
 
             The source code archives are generated automatically by GitHub and are not the app download.
           files: |
             JustDoIt-${{ github.ref_name }}.zip
-            dist/JustDoIt.exe
           generate_release_notes: true
