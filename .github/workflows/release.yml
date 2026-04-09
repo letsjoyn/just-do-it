@@ -38,8 +38,11 @@ jobs:
       - name: Build installer
         shell: pwsh
         run: |
-          $iscc = Get-ChildItem "C:\Program Files*" -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $iscc) { throw "Inno Setup compiler not found" }
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found" }
           & $iscc "/DMyAppVersion=$env:GITHUB_REF_NAME" "installer\JustDoIt.iss"
 
       - name: Create GitHub Release
