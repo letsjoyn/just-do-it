@@ -499,8 +499,14 @@ class FocusClient:
         self.stop_btn.pack(side=tk.LEFT, padx=5)
 
         # ── Audio ──
-        tk.Button(timer_card, text="♪ Ambient Audio (Web Stream)", font=FONT, bg=BG, fg=TXT, bd=1,
-                  cursor="hand2", command=self.play_lofi).pack(pady=(5,10), ipady=4, fill=tk.X, padx=20)
+        audio_frame = tk.Frame(timer_card, bg=CARD)
+        audio_frame.pack(pady=(5,10), ipady=4, fill=tk.X, padx=20)
+        
+        tk.Button(audio_frame, text="▶ MOTIVATION", font=FONT, bg=GREEN, fg="#FFF", bd=0,
+                  cursor="hand2", command=self.play_motivation).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0,5))
+        
+        tk.Button(audio_frame, text="⏸ PAUSE", font=FONT, bg=BG, fg=TXT, bd=1,
+                  cursor="hand2", command=self.pause_motivation).pack(side=tk.LEFT, expand=True, fill=tk.X)
 
         # ── Blocked List ──
         list_card = tk.Frame(self.root, bg=CARD, highlightbackground=BORDER, highlightthickness=1)
@@ -843,12 +849,31 @@ class FocusClient:
         self.dashboard_btn.config(state=tk.NORMAL)
         self.logout_btn.config(state=tk.NORMAL)
 
-    def play_lofi(self):
-        # Open LofiGirl's official site (not YouTube, so it bypasses our blocklist)
+    def play_motivation(self):
+        """Play the Shia LaBeouf motivation audio"""
+        if not HAS_PYGAME:
+            messagebox.showwarning("Audio", "Install pygame for audio: pip install pygame")
+            return
+        
         try:
-            webbrowser.open("https://lofigirl.com/")
-        except:
-            pass
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
+            
+            if os.path.exists("motivation.mp3"):
+                pygame.mixer.music.load("motivation.mp3")
+                pygame.mixer.music.play()
+            else:
+                messagebox.showwarning("Audio", "motivation.mp3 not found")
+        except Exception as e:
+            messagebox.showerror("Audio Error", f"Could not play audio: {e}")
+    
+    def pause_motivation(self):
+        """Pause the motivation audio"""
+        if HAS_PYGAME and pygame.mixer.get_init():
+            try:
+                pygame.mixer.music.pause()
+            except Exception:
+                pass
 
 def start_engine_subprocess():
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
