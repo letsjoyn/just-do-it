@@ -37,6 +37,7 @@ LOCAL_ARCHIVE_FILE = "local_sessions.json"
 SESSION_STATE_FILE = "active_session.json"
 DASHBOARD_PORT = 8765
 DASHBOARD_URL  = "https://just-do-it-1fa38.web.app"
+QR_SENDER_EMAIL = "joynnayvedya@gmail.com"
 
 # ── Firebase Config ──
 FIREBASE_API_KEY = "AIzaSyB6BZ3TixkZunTAchX3EkWlEW-F-QRDXZY"
@@ -599,14 +600,22 @@ class FocusClient:
 
             def proceed():
                 qr_win.destroy()
-                # Check for App Password before jumping into the background thread
+                # Use sender App Password from env or prompt once per app run.
                 sender_pass = getattr(self, "smtp_pass", None)
                 if not sender_pass:
-                     import base64
-                     enc = b'cWtjemtmZmxubnBjaWVsZg=='
-                     sender_pass = os.environ.get("JUSTDOIT_EMAIL_PASS", base64.b64decode(enc).decode('utf-8'))
+                    sender_pass = os.environ.get("JUSTDOIT_EMAIL_PASS", "").strip()
+                if not sender_pass:
+                    sender_pass = simpledialog.askstring(
+                        "Gmail App Password",
+                        f"Enter 16-digit App Password for {QR_SENDER_EMAIL}",
+                        show="*"
+                    )
+                if not sender_pass:
+                    messagebox.showwarning("Email Setup", "App Password is required to send QR email.")
+                    return
+                self.smtp_pass = sender_pass.strip()
                 
-                self.send_qr_email(email, sender_pass)
+                self.send_qr_email(email, self.smtp_pass)
                 self.actually_start(mins)
 
             tk.Button(qr_win, text="I SAVED IT → START TIMER", font=FONTB, bg=BLUE, fg="#FFF",
@@ -618,7 +627,7 @@ class FocusClient:
     def send_qr_email(self, receiver, sender_pass):
         """Send QR unlock email in a background thread so it doesn't block the UI"""
         def _send():
-            SENDER_EMAIL = os.environ.get("JUSTDOIT_EMAIL", "joynnayvedya@gmail.com")
+            SENDER_EMAIL = QR_SENDER_EMAIL
             SENDER_PASS  = sender_pass
             try:
                 msg = EmailMessage()
