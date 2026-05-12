@@ -360,6 +360,30 @@ Or bake the URL as the default for `QR_EMAIL_CLOUD_URL` in `just_do_it.py` for e
 
 Project ID in this repo: **`just-do-it-1fa38`** (see `.firebaserc`).
 
+### CI/CD (GitHub Actions)
+
+On every **pull request** and **push** to `main`, [`.github/workflows/firebase-ci-cd.yml`](.github/workflows/firebase-ci-cd.yml) runs:
+
+| Job | When | What it does |
+|-----|------|----------------|
+| **ci** | PR + push | Validates `firebase.json`, `py_compile` on `just_do_it.py`, `npm ci` + `node --check` in `functions/`. |
+| **deploy-hosting** | Push to `main` or **Run workflow** | Deploys **`web/`** to **Firebase Hosting** (same as `firebase deploy --only hosting`). |
+
+**One-time GitHub setup** (otherwise the deploy job fails):
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) (same project as Firebase), open **IAM & Admin → Service Accounts** (or Firebase → Project settings → Service accounts).
+2. Create or pick a service account used for CI. Grant it at least **Firebase Hosting Admin** on project `just-do-it-1fa38` (or a broader role like **Editor** if you prefer).
+3. **Keys → Add key → JSON** and download the file.
+4. In GitHub: **Repository → Settings → Secrets and variables → Actions → New repository secret**.
+   - Name: **`FIREBASE_SERVICE_ACCOUNT_JSON`**
+   - Value: paste the **entire** JSON file contents.
+
+After that, **every push to `main` on `letsjoyn/just-do-it`** updates the live site automatically. **Pull requests** only run **ci** (no deploy). You can also run **Deploy** manually from the **Actions** tab (**Run workflow**).
+
+**Forks:** the workflow deploy step is gated to `github.repository == 'letsjoyn/just-do-it'` so forks do not attempt deploy with a missing secret. Change that line if you rename the repo or want deploy from a fork (and add the same secret there).
+
+**Functions** are not deployed by this workflow (hosting only). Deploy functions manually with `firebase deploy --only functions`, or extend the workflow with an extra step when you are ready.
+
 ---
 
 ## Repository layout
@@ -371,6 +395,7 @@ Project ID in this repo: **`just-do-it-1fa38`** (see `.firebaserc`).
 | `web/` | Dashboard: `index.html`, `dashboard.js`, assets. |
 | `functions/` | `sendQrUnlockEmail` HTTPS handler + Gmail SMTP (secrets). |
 | `firebase.json` / `.firebaserc` | Hosting + Functions configuration. |
+| `.github/workflows/firebase-ci-cd.yml` | GitHub Actions: CI + Firebase Hosting deploy. |
 
 ---
 

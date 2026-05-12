@@ -1,0 +1,61 @@
+# CI: validate on every PR / push to main
+# CD: deploy Firebase Hosting on push to main (requires repo secret — see README)
+
+name: Firebase CI / Hosting deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Validate project
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate firebase.json
+        run: python3 -c "import json; json.load(open('firebase.json'))"
+
+      - name: Syntax-check desktop app
+        run: python3 -m py_compile just_do_it.py
+
+      - name: Setup Node (functions)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install & check Cloud Functions
+        working-directory: functions
+        run: |
+          npm ci
+          node --check index.js
+
+  deploy-hosting:
+    name: Deploy Firebase Hosting
+    runs-on: ubuntu-latest
+    needs: ci
+    # Canonical repo only (forks skip). Deploy on push to main or manual "Run workflow".
+    if: >-
+      github.repository == 'letsjoyn/just-do-it' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          projectId: just-do-it-1fa38
