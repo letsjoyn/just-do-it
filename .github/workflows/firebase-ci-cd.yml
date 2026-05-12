@@ -54,8 +54,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy to Firebase Hosting
+        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON != '' }}
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           projectId: just-do-it-1fa38
+
+      - name: Skip deploy (no Firebase secret)
+        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON == '' }}
+        run: |
+          echo "::warning::Hosting deploy skipped — add GitHub Actions secret FIREBASE_SERVICE_ACCOUNT_JSON (full service-account JSON). See README → Deployment → CI/CD."
