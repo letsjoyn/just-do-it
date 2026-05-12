@@ -84,3 +84,5 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           projectId: just-do-it-1fa38
+          # Production; omitting uses preview channel deploy (fails: "channelID is currently required")
+          channelId: live
