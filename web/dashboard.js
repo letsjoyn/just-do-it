@@ -16,11 +16,54 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+const THEME_KEY = "jdi-theme";
+
+function getResolvedTheme() {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === "dark" || saved === "light") return saved;
+    return "light";
+}
+
+function applyTheme(theme) {
+    const root = document.documentElement;
+    if (theme === "dark") {
+        root.setAttribute("data-theme", "dark");
+    } else {
+        root.removeAttribute("data-theme");
+    }
+    const meta = document.getElementById("theme-color-meta");
+    if (meta) meta.setAttribute("content", theme === "dark" ? "#0d0d0d" : "#f5f7fb");
+    const dark = theme === "dark";
+    document.querySelectorAll(".theme-switch").forEach((el) => {
+        el.setAttribute("aria-checked", dark ? "true" : "false");
+        el.setAttribute(
+            "aria-label",
+            dark ? "Switch to light theme" : "Switch to dark theme"
+        );
+    });
+}
+
 let currentUser = null;
 let allSessions = [];
 let filteredDate = null; // for heatmap filtering
 
 document.addEventListener("DOMContentLoaded", () => {
+    applyTheme(getResolvedTheme());
+
+    document.querySelectorAll(".theme-switch").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+            localStorage.setItem(THEME_KEY, next);
+            applyTheme(next);
+        });
+    });
+
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+        if (!localStorage.getItem(THEME_KEY)) {
+            applyTheme("light");
+        }
+    });
+
     const loginContainer = document.getElementById('login-container');
     const dashContainer = document.getElementById('dashboard-container');
     const siteFooter = document.getElementById('site-footer');
@@ -32,6 +75,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const userEmail = document.getElementById('user-email');
 
     function setViewState(isAuthenticated) {
+        document.body.classList.toggle("state-dashboard", isAuthenticated);
+        document.body.classList.toggle("state-login", !isAuthenticated);
+
         const shiaMeme = document.getElementById('shia-meme');
         if (isAuthenticated) {
             loginContainer.style.display = 'none';
@@ -168,7 +214,7 @@ function renderDashboard() {
 
     tableBody.innerHTML = '';
     if (sessionsToRender.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#666;font-style:italic;">No records found.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="5" class="table-placeholder">No records found.</td></tr>';
     } else {
         sessionsToRender.forEach(session => {
             const d = new Date(session.date);
@@ -193,10 +239,10 @@ function renderDashboard() {
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td style="font-weight: bold; color: #333;">${dateStr}</td>
-                <td style="color:#334155;">${timeRangeStr}</td>
-                <td style="font-size: 1.1rem; color: #000;">${durStr}</td>
-                <td><span class="badge" style="background:#f0f0f0; border: 1px solid #ccc; color:#000;">${method}</span></td>
+                <td style="font-weight: bold; color: var(--text-heading);">${dateStr}</td>
+                <td style="color: var(--text-muted);">${timeRangeStr}</td>
+                <td style="font-size: 1.1rem; color: var(--text-heading);">${durStr}</td>
+                <td><span class="badge">${method}</span></td>
                 <td>${earlyBadge}</td>
             `;
             tableBody.appendChild(tr);
