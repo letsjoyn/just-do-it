@@ -13,9 +13,11 @@ A **Windows-first focus suite**: a Python desktop client coordinates a **native 
 - [Security model](#security-model)
 - [Tech stack](#tech-stack)
 - [Getting started](#getting-started)
+- [If you cloned this repository](#if-you-cloned-this-repository-end-user-path)
 - [Optional: QR email (Cloud Function)](#optional-qr-email-cloud-function)
 - [Deployment](#deployment)
 - [Repository layout](#repository-layout)
+- [Known limitations & audit notes](#known-limitations--audit-notes)
 
 ---
 
@@ -231,7 +233,7 @@ py -m pip install "qrcode[pil]" opencv-python
 
 ### Engine binary
 
-Place **`engine.exe`** next to `just_do_it.py`. Build from `engine.cpp`, for example:
+This repository includes a prebuilt **`engine.exe`** (Windows) next to `just_do_it.py`, so a normal **`git clone`** already has the engine. Rebuild only if you change `engine.cpp`:
 
 ```powershell
 # MSVC Developer shell (example)
@@ -263,6 +265,64 @@ match /users/{userId}/sessions/{sessionId} {
 ```
 
 Avoid time-bounded “open” rules that expire and **deny all traffic** after a date.
+
+---
+
+## If you cloned this repository (end-user path)
+
+Use this flow if you only want to **run the app** after cloning from GitHub (Windows).
+
+### 1. Clone
+
+```powershell
+git clone https://github.com/letsjoyn/just-do-it.git
+cd just-do-it
+```
+
+You should see **`engine.exe`** and **`just_do_it.py`** in the same folder (the engine is **not** “already running”; the Python app **starts** `engine.exe` when it launches).
+
+### 2. Install Python (if you do not have it)
+
+Install **Python 3.11 or 3.12** from [python.org](https://www.python.org/downloads/) (or the Microsoft Store). Then install dependencies:
+
+```powershell
+py -m pip install "qrcode[pil]" opencv-python
+```
+
+If `py` is not found, try `python -m pip ...`.
+
+### 3. Run as Administrator
+
+1. Open **PowerShell** or **Command Prompt** as **Administrator** (right-click → *Run as administrator*).
+2. `cd` into the cloned folder.
+3. Start the app:
+
+```powershell
+py just_do_it.py
+```
+
+Without Administrator elevation, the app exits: blocking needs permission to update `hosts` and manage processes.
+
+### 4. Inside the app
+
+1. **Sign up or log in** with email + password (same account as the web dashboard below).
+2. Set **duration**, choose **Math** or **QR** unlock mode, then **START**.
+3. **QR mode:** save or photograph the QR; use **EMAIL QR TO ME** only if the maintainer deployed the Cloud Function and configured the URL (see [optional QR email](#optional-qr-email-cloud-function)).
+4. **End session:** let the timer finish, or **Terminate** and complete the unlock challenge.
+
+### 5. View stats in the browser
+
+Open **`https://just-do-it-1fa38.web.app`**, sign in with the **same** email/password as the desktop app.
+
+### Common issues
+
+| Symptom | Likely cause |
+|---------|----------------|
+| App closes immediately | Not running **as Administrator**. |
+| “Engine offline” / weak blocking | `engine.exe` missing or blocked by AV; ensure it sits next to `just_do_it.py`. |
+| Webcam / QR errors | Install **opencv-python**; allow **camera** in Windows *Settings → Privacy → Camera*. |
+| “Email QR” warns not configured | Cloud Function URL not set (`JUSTDOIT_QR_MAIL_URL` or baked default in code). |
+| Dashboard empty / permission error | Wrong account, or Firestore **rules** too strict / expired open rules. |
 
 ---
 
@@ -319,6 +379,37 @@ Project ID in this repo: **`just-do-it-1fa38`** (see `.firebaserc`).
 - **Friction over “unhackability”:** motivated users can always force-kill processes; the product aims for **intentional** early exit (unlock), not kernel-level unkillable locks.
 - **Least exposure of secrets:** shared mail credentials live **only** on the server when using the optional function path.
 - **Honest sync:** local queue + idempotent document IDs so transient network or rule failures do not silently drop sessions.
+
+---
+
+## Known limitations & audit notes
+
+These are **intentional tradeoffs**, **acceptable for a personal tool**, or **follow-up work**—not a claim that every line is bug-free.
+
+### Circumvention (by design, not “bugs”)
+
+| Vector | Why it still “works” that way |
+|--------|------------------------------|
+| **Task Manager / End task** | The OS can always stop user processes. There is no supported way to make a consumer app unkillable. |
+| **Edit `hosts` / kill `engine.exe` manually** | Anyone with **Administrator** can undo enforcement the same way the app applies it. |
+| **Skip unlock** | If the user never completes **Terminate** + unlock, they should **not** get a clean early exit; killing the app bypasses logging by definition. |
+
+### Technical gaps worth fixing later
+
+| Area | Risk | Notes |
+|------|------|--------|
+| **Firebase ID token lifetime** | After ~**1 hour**, REST `PATCH` to Firestore can fail until the user signs in again. The SDK web client refreshes tokens automatically; the **desktop app does not** refresh today. |
+| **Session document ID** | **Collision** if two sessions end in the same UTC second (`s_{unixTs}`) — rare but possible; could append random suffix. |
+| **Sync queue** | On first failed write, the loop **`break`s** and leaves remaining rows in `sync_payload.json` until the next flush trigger (e.g. another session end or startup retry). |
+| **QR scan loop** | OpenCV runs on the **main Tk thread** during early exit — the window may show “**Not responding**” while the camera loop runs. |
+| **Local dashboard server** | Serves `auth.json` (and other files) on **`127.0.0.1`** — any **local** process could request that URL; treat the machine as trusted. |
+| **Public HTTP function URL** | If deployed with **public invoke**, rely on **Bearer token** verification; consider **rate limits** / abuse monitoring for cost. |
+| **Shared Firebase project** | Cloners use the **same** project/config as upstream until they fork and replace keys — fine for demos, wrong for untrusted multi-tenant SaaS. |
+
+### Minor / cosmetic
+
+- **`send_ipc("PING")`** is only a “can we open the pipe?” probe; the engine documents **`START` / `UNLOCK` / `STATUS`** — the name `PING` is historical, not a formal engine opcode in `engine.cpp`.
+- **Dashboard** assumes `date` parses cleanly; malformed documents could skew sorts.
 
 ---
 
