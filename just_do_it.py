@@ -1,12 +1,11 @@
 import tkinter as tk
 from tkinter import messagebox, simpledialog
-import ctypes, random, sys, os, json, smtplib, sqlite3, subprocess, math
+import ctypes, random, sys, os, json, base64, subprocess, math
 import threading, webbrowser, functools
 import urllib.request, urllib.error
 import signal
 import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-from email.message import EmailMessage
 from datetime import datetime, timezone
 
 WINMM = ctypes.windll.winmm
@@ -38,7 +37,8 @@ SESSION_STATE_FILE = "active_session.json"
 BLOCKED_ITEMS_FILE = "blocked_items.json"
 DASHBOARD_PORT = 8765
 DASHBOARD_URL  = "https://just-do-it-1fa38.web.app"
-QR_SENDER_EMAIL = "joynnayvedya@gmail.com"
+# QR emailed via HTTPS Cloud Function (secrets live on server only). Set env or paste URL for shipped builds.
+QR_EMAIL_CLOUD_URL = os.environ.get("JUSTDOIT_QR_MAIL_URL", "").strip()
 
 DEFAULT_BLOCKED_ITEMS = [
     "youtube.com", "facebook.com", "instagram.com", "reddit.com", "twitter.com",
@@ -404,60 +404,81 @@ class FocusClient:
         except: pass
 
         if not self.user_uid or not self.auth_token: return
+        self._start_cloud_push_thread(local_list)
 
-        def _push():
-            success_count = 0
-            for session in list(local_list): # iterate copy
-                # Build Firestore payload for each session
-                payload = {
-                    "fields": {
-                        "date": {"stringValue": session["date"]},
-                        "duration_seconds": {"integerValue": str(session["duration_seconds"])},
-                        "early_terminated": {"booleanValue": session["early_terminated"]},
-                        "unlock_method": {"stringValue": session["unlock_method"]},
-                        "blocked_items": {"arrayValue": {"values": [{"stringValue": b} for b in session["blocked_items"]]}},
-                    }
+    def _run_cloud_push(self, local_list):
+        """Upload sessions from mutable local_list; removes successes, updates SYNC_FILE."""
+        if not self.user_uid or not self.auth_token:
+            return
+        success_count = 0
+        for session in list(local_list):
+            payload = {
+                "fields": {
+                    "date": {"stringValue": session["date"]},
+                    "duration_seconds": {"integerValue": str(session["duration_seconds"])},
+                    "early_terminated": {"booleanValue": session["early_terminated"]},
+                    "unlock_method": {"stringValue": session["unlock_method"]},
+                    "blocked_items": {"arrayValue": {"values": [{"stringValue": b} for b in session["blocked_items"]]}},
                 }
-                
-                if session.get("screen_time"):
-                    fields = {}
-                    for app, secs in session["screen_time"].items():
-                        fields[app] = {"integerValue": str(secs)}
-                    payload["fields"]["screen_time"] = {"mapValue": {"fields": fields}}
+            }
 
-                try:
-                    # Deterministic ID based on time to avoid duplicates
-                    ts = int(datetime.fromisoformat(session["date"].replace("Z", "+00:00")).timestamp())
-                    session_id = f"s_{ts}"
-                    
-                    url = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT}/databases/(default)/documents/users/{self.user_uid}/sessions/{session_id}?key={FIREBASE_API_KEY}"
-                    
-                    req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {self.auth_token}"
-                    }, method="PATCH")
-                    
-                    with urllib.request.urlopen(req) as resp:
-                        success_count += 1
-                        local_list.remove(session) # remove successful 
-                except Exception as e:
-                    print(f"Failed to sync session: {e}")
-                    break # stop trying if offline
-            
-            if success_count > 0:
-                print(f"[Sync] Synced {success_count} sessions to cloud!")
-            
-            # Re-write remaining (failed) items, or delete file if empty
-            if len(local_list) == 0:
-                if os.path.exists(SYNC_FILE):
-                    try: os.remove(SYNC_FILE)
-                    except: pass
-            else:
-                try:
-                    with open(SYNC_FILE, "w") as f: json.dump(local_list, f, indent=2)
-                except: pass
+            if session.get("screen_time"):
+                fields = {}
+                for app, secs in session["screen_time"].items():
+                    fields[app] = {"integerValue": str(secs)}
+                payload["fields"]["screen_time"] = {"mapValue": {"fields": fields}}
 
-        threading.Thread(target=_push, daemon=True).start()
+            try:
+                ts = int(datetime.fromisoformat(session["date"].replace("Z", "+00:00")).timestamp())
+                session_id = f"s_{ts}"
+
+                url = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT}/databases/(default)/documents/users/{self.user_uid}/sessions/{session_id}?key={FIREBASE_API_KEY}"
+
+                req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.auth_token}"
+                }, method="PATCH")
+
+                with urllib.request.urlopen(req):
+                    success_count += 1
+                    local_list.remove(session)
+            except Exception as e:
+                print(f"Failed to sync session: {e}")
+                break
+
+        if success_count > 0:
+            print(f"[Sync] Synced {success_count} sessions to cloud!")
+
+        if len(local_list) == 0:
+            if os.path.exists(SYNC_FILE):
+                try:
+                    os.remove(SYNC_FILE)
+                except Exception:
+                    pass
+        else:
+            try:
+                with open(SYNC_FILE, "w") as f:
+                    json.dump(local_list, f, indent=2)
+            except Exception:
+                pass
+
+    def _start_cloud_push_thread(self, local_list):
+        if not self.user_uid or not self.auth_token:
+            return
+        threading.Thread(target=self._run_cloud_push, args=(local_list,), daemon=True).start()
+
+    def retry_pending_cloud_sync(self):
+        """Re-send anything still in sync_payload.json (e.g. after Firestore rules were fixed)."""
+        local_list = []
+        try:
+            if os.path.exists(SYNC_FILE):
+                with open(SYNC_FILE, "r") as f:
+                    local_list = json.load(f)
+        except Exception:
+            return
+        if not local_list:
+            return
+        self._start_cloud_push_thread(local_list)
 
     # ── UI ──
     def build(self):
@@ -560,6 +581,10 @@ class FocusClient:
                                  bd=0, padx=10, command=self.del_item, cursor="hand2")
         self.del_btn.pack(side=tk.LEFT, padx=(5,0))
 
+        # Sessions that failed cloud sync (e.g. expired Firestore rules) sit in sync_payload.json;
+        # push them as soon as the user opens the app with valid auth and working rules.
+        self.retry_pending_cloud_sync()
+
     def add_item(self):
         if self.is_running:
             return
@@ -588,6 +613,54 @@ class FocusClient:
         self.add_btn.config(state=btn_state)
         self.del_btn.config(state=btn_state)
         self.listbox.config(state=list_state)
+
+    def send_qr_via_cloud_function(self):
+        """Send unlock QR to the signed-in user's inbox (no App Password on device — server holds SMTP)."""
+        if not QR_EMAIL_CLOUD_URL:
+            messagebox.showwarning(
+                "Email not configured",
+                "Deploy the Firebase function (see README) and set JUSTDOIT_QR_MAIL_URL, "
+                "or bake the function URL into the app for your users.",
+            )
+            return
+        if not self.auth_token or not self.user_email:
+            messagebox.showwarning("Login required", "Log in first so we know which inbox to use.")
+            return
+        if not os.path.exists("secret_unlock_qr.png"):
+            messagebox.showerror("Missing QR", "QR file not found. Pick QR mode again from Start.")
+            return
+
+        def _run():
+            try:
+                with open("secret_unlock_qr.png", "rb") as f:
+                    b64 = base64.standard_b64encode(f.read()).decode("ascii")
+                payload = json.dumps({"imageBase64": b64}).encode("utf-8")
+                req = urllib.request.Request(
+                    QR_EMAIL_CLOUD_URL,
+                    data=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self.auth_token}",
+                    },
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    raw = resp.read().decode("utf-8", errors="replace")
+                    if resp.status != 200:
+                        raise RuntimeError(raw or f"HTTP {resp.status}")
+                self.root.after(0, lambda: messagebox.showinfo("Sent", f"QR emailed to {self.user_email}"))
+            except urllib.error.HTTPError as e:
+                err = e.read().decode("utf-8", errors="replace")
+                self.root.after(
+                    0,
+                    lambda msg=err, code=e.code: messagebox.showerror(
+                        "Email failed", f"Server returned {code}:\n{msg}"
+                    ),
+                )
+            except Exception as e:
+                self.root.after(0, lambda err=str(e): messagebox.showerror("Email failed", err))
+
+        threading.Thread(target=_run, daemon=True).start()
 
     # ── Pre-start flow ──
     def pre_start(self):
@@ -623,7 +696,7 @@ class FocusClient:
             # Show QR on screen
             qr_win = tk.Toplevel(self.root)
             qr_win.title("Save this QR Code!")
-            qr_win.geometry("320x400")
+            qr_win.geometry("340x500")
             qr_win.configure(bg=CARD)
             qr_win.attributes("-topmost", True)
 
@@ -645,92 +718,45 @@ class FocusClient:
                 try: os.startfile("secret_unlock_qr.png")
                 except: pass
 
-            def proceed():
+            def start_focus_only():
                 qr_win.destroy()
-                # Use sender App Password from env or prompt once per app run.
-                sender_pass = getattr(self, "smtp_pass", None)
-                if not sender_pass:
-                    sender_pass = os.environ.get("JUSTDOIT_EMAIL_PASS", "").strip()
-                if not sender_pass:
-                    sender_pass = simpledialog.askstring(
-                        "Gmail App Password",
-                        f"Enter 16-digit App Password for {QR_SENDER_EMAIL}",
-                        show="*"
-                    )
-                if not sender_pass:
-                    messagebox.showwarning("Email Setup", "App Password is required to send QR email.")
-                    return
-                self.smtp_pass = sender_pass.strip()
-                
-                self.send_qr_email(email, self.smtp_pass)
                 self.actually_start(mins)
 
-            tk.Button(qr_win, text="I SAVED IT → START TIMER", font=FONTB, bg=BLUE, fg="#FFF",
-                      bd=0, pady=8, cursor="hand2", command=proceed).pack(fill=tk.X, padx=20, pady=10)
+            btn_frame = tk.Frame(qr_win, bg=CARD)
+            btn_frame.pack(fill=tk.X, padx=20, pady=10)
+            tk.Button(
+                btn_frame,
+                text="EMAIL QR TO ME",
+                font=FONTB,
+                bg=GREEN,
+                fg="#FFF",
+                bd=0,
+                pady=8,
+                cursor="hand2",
+                command=self.send_qr_via_cloud_function,
+            ).pack(fill=tk.X, pady=(0, 6))
+            tk.Button(
+                btn_frame,
+                text="START FOCUS",
+                font=FONTB,
+                bg=BLUE,
+                fg="#FFF",
+                bd=0,
+                pady=8,
+                cursor="hand2",
+                command=start_focus_only,
+            ).pack(fill=tk.X)
+            tk.Label(
+                qr_win,
+                text="“Email QR” sends to the inbox you used to log in.\nNo Gmail password is stored on this PC.",
+                font=("Segoe UI", 8),
+                fg=TXT2,
+                bg=CARD,
+                justify=tk.CENTER,
+            ).pack(pady=(0, 12), padx=16)
         else:
             # Math mode - just start directly
             self.actually_start(mins)
-
-    def send_qr_email(self, receiver, sender_pass):
-        """Send QR unlock email in a background thread so it doesn't block the UI"""
-        def _send():
-            SENDER_EMAIL = QR_SENDER_EMAIL
-            SENDER_PASS  = sender_pass
-            try:
-                msg = EmailMessage()
-                msg['Subject'] = 'Unlock Authorization - Just Do It'
-                msg['From'] = f"Just Do It <{SENDER_EMAIL}>"
-                msg['To'] = receiver
-                msg.set_content("Scan the attached QR code to unlock.")
-
-                html = f"""<html><body style="font-family:Segoe UI;background:{BG};padding:30px;margin:0;">
-                <div style="max-width:400px;margin:0 auto;background:{CARD};border-radius:10px;border:1px solid {BORDER};overflow:hidden;">
-                <div style="background:{BLUE};padding:16px;text-align:center;"><h2 style="margin:0;color:#FFF;">Just Do It</h2></div>
-                <div style="padding:24px;text-align:center;color:{TXT};">
-                <h3 style="color:{TXT};">Unlock Authorization</h3>
-                <p style="color:{TXT2};">Scan the attached QR with your webcam to end focus early.</p>
-                <p style="color:{GREEN};font-style:italic;">"Stay focused. Stay sharp."</p>
-                </div></div></body></html>"""
-                msg.add_alternative(html, subtype='html')
-
-                with open("secret_unlock_qr.png",'rb') as f:
-                    msg.add_attachment(f.read(), maintype='image', subtype='png', filename='unlock_qr.png')
-
-                import ssl
-                ctx = ssl.create_default_context()
-
-                # Try TLS on port 587 first, then SSL on 465
-                sent = False
-                for attempt in range(2):
-                    try:
-                        if attempt == 0:
-                            s = smtplib.SMTP("smtp.gmail.com", 587, timeout=20)
-                            s.ehlo("localhost")
-                            s.starttls(context=ctx)
-                            s.ehlo("localhost")
-                        else:
-                            s = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20, context=ctx)
-                        s.login(SENDER_EMAIL, SENDER_PASS)
-                        s.send_message(msg)
-                        s.quit()
-                        sent = True
-                        break
-                    except Exception as smtp_err:
-                        print(f"[Email] Attempt {attempt+1} failed: {smtp_err}")
-                        try: s.quit()
-                        except: pass
-
-                if sent:
-                    self.root.after(0, lambda: messagebox.showinfo("Sent", f"QR emailed to {receiver}"))
-                else:
-                    self.root.after(0, lambda: messagebox.showwarning("Email Failed",
-                        f"Could not connect to Gmail.\nCheck your App Password in Google Account settings.\nUse the QR photo you took instead."))
-            except Exception as e:
-                print(f"[Email] Error: {e}")
-                self.root.after(0, lambda: messagebox.showwarning("Email Failed",
-                    f"Couldn't send email: {e}\nUse the photo you took instead."))
-
-        threading.Thread(target=_send, daemon=True).start()
 
     def actually_start(self, mins):
         self.total_seconds = mins * 60
@@ -788,6 +814,18 @@ class FocusClient:
         messagebox.showinfo("Done", f"Session complete! {self.initial_mins} min logged.\nDashboard opened in browser.")
 
     # ── Terminate (uses pre-selected method) ──
+    def resume_focus_after_terminate_cancelled(self):
+        """User closed the early-exit challenge without finishing; keep blocking and resume countdown."""
+        self.pending_termination_seconds = 0
+        self.is_running = True
+        self.save_active_session_state()
+        if self.timer_job:
+            try:
+                self.root.after_cancel(self.timer_job)
+            except Exception:
+                pass
+        self.timer_job = self.root.after(1000, self.timer_tick)
+
     def terminate(self):
         if not self.is_running:
             return
@@ -815,6 +853,21 @@ class FocusClient:
         win.geometry("320x220")
         win.configure(bg=CARD)
         win.attributes("-topmost", True)
+        win.transient(self.root)
+
+        solved = {"done": False}
+
+        def on_math_close():
+            if solved["done"]:
+                return
+            solved["done"] = True
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+            self.resume_focus_after_terminate_cancelled()
+
+        win.protocol("WM_DELETE_WINDOW", on_math_close)
 
         # Generate HARD math (3 numbers)
         a, b, c = random.randint(13,49), random.randint(7,29), random.randint(2,9)
@@ -828,6 +881,7 @@ class FocusClient:
 
         def check():
             if ent.get().strip() == answer:
+                solved["done"] = True
                 win.destroy()
                 duration = getattr(self, "pending_termination_seconds", (self.initial_mins * 60) - self.seconds_left)
                 if duration > 0: self.log_session(duration, True)
@@ -849,6 +903,7 @@ class FocusClient:
         try: import cv2
         except ImportError:
             messagebox.showerror("Missing", "Install opencv: pip install opencv-python")
+            self.resume_focus_after_terminate_cancelled()
             return
 
         self.root.iconify()  # Minimize main window
@@ -882,10 +937,7 @@ class FocusClient:
         self.root.deiconify()
 
         # QR flow cancelled; continue countdown from where terminate was requested.
-        self.pending_termination_seconds = 0
-        self.is_running = True
-        self.save_active_session_state()
-        self.timer_job = self.root.after(1000, self.timer_tick)
+        self.resume_focus_after_terminate_cancelled()
 
     def open_dashboard(self):
         """Open the stats dashboard in the default browser"""
@@ -951,15 +1003,20 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = FocusClient(root, engine_proc=engine_proc)
 
-    def handle_sigint(_sig, _frame):
-        if app.is_running:
-            messagebox.showwarning("Focus Active", "Ctrl+C is disabled while a focus session is running. Use Stop and unlock first.")
-            return
-        app.cleanup_and_exit()
-
+    # Ignore Ctrl+C from the console entirely (no exit, no Tk re-entry from a signal handler).
     try:
-        signal.signal(signal.SIGINT, handle_sigint)
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
     except Exception:
         pass
 
-    root.mainloop()
+    while True:
+        try:
+            root.mainloop()
+            break
+        except KeyboardInterrupt:
+            try:
+                if root.winfo_exists():
+                    continue
+            except tk.TclError:
+                pass
+            break

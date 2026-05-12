@@ -12,6 +12,7 @@ dist/
 *.spec
 *.zip
 .firebase/
+functions/node_modules/
 
 # local packaging leftovers
 /output-onlinepngtools.png
