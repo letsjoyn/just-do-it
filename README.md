@@ -384,7 +384,7 @@ After that, **every push to `main` on `letsjoyn/just-do-it`** updates the live s
 
 **Functions** are not deployed by this workflow (hosting only). Deploy functions manually with `firebase deploy --only functions`, or extend the workflow with an extra step when you are ready.
 
-**Troubleshooting:** if you see `Input required and not supplied: firebaseServiceAccount`, the secret is missing or empty. Create **`FIREBASE_SERVICE_ACCOUNT_JSON`** exactly under **Settings → Secrets and variables → Actions** (repository secrets, not environment secrets, unless you scope the workflow). Until then, the deploy step is **skipped** and the workflow still passes with a warning.
+**Troubleshooting:** if deploy fails with `firebaseServiceAccount` / missing input, the secret is empty or misnamed — use **`FIREBASE_SERVICE_ACCOUNT_JSON`** under **Settings → Secrets and variables → Actions**. The workflow uses a small **gate** job (because GitHub does not allow `secrets` inside step `if:` expressions).
 
 ---
 

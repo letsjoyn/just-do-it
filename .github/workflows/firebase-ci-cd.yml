@@ -1,5 +1,8 @@
 # CI: validate on every PR / push to main
 # CD: deploy Firebase Hosting on push to main (requires repo secret — see README)
+#
+# Note: GitHub does not allow `secrets.*` inside step `if:` expressions (parse error).
+# We use a tiny job that maps the secret to a boolean job output, then `needs.*` in deploy `if:`.
 
 name: Firebase CI / Hosting deploy
 
@@ -40,12 +43,34 @@ jobs:
           npm ci
           node --check index.js
 
+  # secrets cannot be used in step `if:` — expose only true/false via job output
+  gate-firebase-secret:
+    name: Check Hosting deploy secret
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_ok: ${{ steps.check.outputs.deploy_ok }}
+    steps:
+      - id: check
+        env:
+          CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$CREDS" ]; then
+            echo "deploy_ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy_ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Missing secret notice
+        if: steps.check.outputs.deploy_ok == 'false'
+        run: |
+          echo "::notice::FIREBASE_SERVICE_ACCOUNT_JSON is not set — Hosting deploy job will be skipped."
+
   deploy-hosting:
     name: Deploy Firebase Hosting
     runs-on: ubuntu-latest
-    needs: ci
-    # Canonical repo only (forks skip). Deploy on push to main or manual "Run workflow".
+    needs: [ci, gate-firebase-secret]
     if: >-
+      needs.gate-firebase-secret.outputs.deploy_ok == 'true' &&
       github.repository == 'letsjoyn/just-do-it' &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'push' && github.ref == 'refs/heads/main'))
@@ -54,14 +79,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy to Firebase Hosting
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON != '' }}
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           projectId: just-do-it-1fa38
-
-      - name: Skip deploy (no Firebase secret)
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON == '' }}
-        run: |
-          echo "::warning::Hosting deploy skipped — add GitHub Actions secret FIREBASE_SERVICE_ACCOUNT_JSON (full service-account JSON). See README → Deployment → CI/CD."
